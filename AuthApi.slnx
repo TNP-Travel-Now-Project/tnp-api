@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="AuthApi.Application/AuthApi.Application.csproj" Id="716a13ee-2245-40f5-a974-3fcb70afa36f" />
+    <Project Path="AuthApi.Domain/AuthApi.Domain.csproj" Id="3f512c63-d1b5-4408-ab1c-5e723ea3c61f" />
+    <Project Path="AuthApi.Infrastructure/AuthApi.Infrastructure.csproj" Id="dfa0caf1-6397-48fb-8c2e-d9dbb48b22e3" />
+    <Project Path="AuthApi.WebApi/AuthApi.WebApi.csproj" Id="5bdbe895-4335-46e9-aa82-a839347cd302" />
+  </Folder>
+</Solution>

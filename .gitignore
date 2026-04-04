@@ -36,6 +36,9 @@ ScaffoldingReadMe.txt
 # NuGet Symbol Packages
 *.snupkg
 
+# Visual Studio temporary files
+.vs/
+
 # Others
 ~$*
 *~

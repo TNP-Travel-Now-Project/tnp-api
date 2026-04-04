@@ -1,2 +1,2 @@
-# FMP-api
-The place where BE logic is created
+# auth-api
+The place where Auth + jwt logic is created
