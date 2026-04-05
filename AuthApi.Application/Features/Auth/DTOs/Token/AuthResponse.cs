@@ -1,4 +1,4 @@
-﻿namespace AuthApi.Application.Features.Auth.DTOs
+﻿namespace AuthApi.Application.Features.Auth.DTOs.Token
 {
     public sealed record AuthResponse(
     string AccessToken,

@@ -15,4 +15,8 @@
 		<ProjectReference Include="..\AuthApi.Domain\AuthApi.Domain.csproj" />
 	</ItemGroup>
 
+	<ItemGroup>
+	  <Folder Include="Features\Users\Commands\CreateUser\" />
+	</ItemGroup>
+
 </Project>

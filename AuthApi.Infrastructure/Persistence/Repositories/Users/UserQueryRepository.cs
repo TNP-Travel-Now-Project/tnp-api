@@ -1,9 +1,8 @@
 ﻿using AuthApi.Application.Abstractions.Repositories;
-using AuthApi.Application.Features.Auth.DTOs;
 using AuthApi.Application.Features.Users.DTOs;
 using SqlKata.Execution;
 
-namespace AuthApi.Infrastructure.Persistence.Repositories
+namespace AuthApi.Infrastructure.Persistence.Repositories.Users
 {
     internal class UserQueryRepository : IUserQueryRepository
     {
@@ -16,8 +15,8 @@ namespace AuthApi.Infrastructure.Persistence.Repositories
 
         public async Task<List<UserDto>> GetAllUserAsync(CancellationToken cancellationToken)
         {
-            var query = _queryFactory.Query("Users")
-                                    .Select("Id", "Age_Age as Value", "Role", "Name");
+            var query = _queryFactory.Query("AspNetUsers")
+                                    .Select("Id", "Age", "Role", "FullName", "Email", "CreatedAt");
 
             var user = await query.GetAsync<UserDto>(cancellationToken: cancellationToken);
 

@@ -3,7 +3,6 @@
     public abstract class BaseEntity : IEntity
     {
         public Guid Id { get; private set; }
-
         protected BaseEntity() { }
         protected BaseEntity(Guid id)
         {

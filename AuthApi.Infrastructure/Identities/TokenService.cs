@@ -1,5 +1,5 @@
-﻿using AuthApi.Application.Abstractions.Repositories.Identities;
-using AuthApi.Application.Features.Auth.DTOs;
+﻿using AuthApi.Application.Abstractions.Repositories.Auth;
+using AuthApi.Application.Features.Auth.DTOs.Token;
 using AuthApi.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -101,7 +101,7 @@ namespace AuthApi.Infrastructure.Identities
                 Id = user.Id,
                 Email = user.Email ?? string.Empty,
                 FullName = user.FullName,
-                Role = user.Role
+                
             });
         }
 

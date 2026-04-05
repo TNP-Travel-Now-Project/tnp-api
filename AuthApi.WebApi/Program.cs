@@ -1,5 +1,11 @@
 using AuthApi.Application.Configuration;
+using AuthApi.Infrastructure.Common;
 using AuthApi.Infrastructure.Configuration;
+using AuthApi.Infrastructure.Identities;
+using AuthApi.Infrastructure.Persistence;
+using Hangfire;
+using Hangfire.SqlServer;
+using Microsoft.AspNetCore.Identity;
 
 namespace AuthApi.WebApi
 {
@@ -9,21 +15,44 @@ namespace AuthApi.WebApi
         {
             var builder = WebApplication.CreateBuilder(args);
 
-            // Add services to the container.
-
             builder.Services.AddControllers();
+
+            builder.Services.Configure<AppSettings>(
+                 builder.Configuration.GetSection("AppSettings")
+            );
 
             builder.Services.AddApplication()
                             .AddInfrastructure(builder.Configuration);
 
-            //builder.Services.AddOpenApi();
+            builder.Services.AddDataProtection();
+
+            builder.Services.AddIdentityCore<ApplicationUser>()
+                            .AddRoles<IdentityRole<Guid>>()
+                            .AddEntityFrameworkStores<AppDbContext>()
+                            .AddDefaultTokenProviders();
+
+            builder.Services.AddHangfire(config =>
+            {
+                config.SetDataCompatibilityLevel(CompatibilityLevel.Version_170)
+                      .UseSimpleAssemblyNameTypeSerializer()
+                      .UseRecommendedSerializerSettings()
+                      .UseSqlServerStorage(builder.Configuration.GetConnectionString("Default"), new SqlServerStorageOptions
+                      {
+                          CommandBatchMaxTimeout = TimeSpan.FromMinutes(5),
+                          SlidingInvisibilityTimeout = TimeSpan.FromMinutes(5),
+                          QueuePollInterval = TimeSpan.Zero,
+                          UseRecommendedIsolationLevel = true,
+                          DisableGlobalLocks = true
+                      });
+            });
+
+            builder.Services.AddHangfireServer();
 
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen();
 
             var app = builder.Build();
 
-            // Configure the HTTP request pipeline.
             if (app.Environment.IsDevelopment())
             {
                 //app.MapOpenApi();
@@ -31,10 +60,13 @@ namespace AuthApi.WebApi
                 app.UseSwaggerUI();
             }
 
+            app.UseHangfireDashboard("/hangfire");
+
             app.UseHttpsRedirection();
 
             app.UseAuthorization();
 
+            app.UseAuthentication();
 
             app.MapControllers();
 

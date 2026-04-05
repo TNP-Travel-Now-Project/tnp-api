@@ -15,6 +15,7 @@ namespace AuthApi.Infrastructure.Persistence
         protected override void OnModelCreating(ModelBuilder builder)
         {
             base.OnModelCreating(builder);
+
             var ageUserConverter = new ValueConverter<AgeUser, int>(v => v.Value, v => AgeUser.Create(v));
 
             builder.Entity<ApplicationUser>(user =>
@@ -30,11 +31,6 @@ namespace AuthApi.Infrastructure.Persistence
                    .HasColumnName("Age")
                    .IsRequired();
 
-
-                user.Property(u => u.Role)
-                    .HasConversion<string>()
-                    .HasMaxLength(50)
-                    .IsRequired();
 
                 user.Property(u => u.CreatedAt).IsRequired();
                 user.Property(u => u.UpdatedAt);

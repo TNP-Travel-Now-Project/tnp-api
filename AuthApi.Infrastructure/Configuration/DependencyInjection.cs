@@ -1,8 +1,13 @@
 ﻿using AuthApi.Application.Abstractions.Repositories;
+using AuthApi.Application.Abstractions.Repositories.Auth;
+using AuthApi.Application.Abstractions.Repositories.Email;
 using AuthApi.Domain.Interfaces;
+using AuthApi.Infrastructure.Identities;
 using AuthApi.Infrastructure.Persistence;
 using AuthApi.Infrastructure.Persistence.Connection;
-using AuthApi.Infrastructure.Persistence.Repositories;
+using AuthApi.Infrastructure.Persistence.Repositories.Users;
+using AuthApi.Infrastructure.Services.Email;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -39,10 +44,34 @@ namespace AuthApi.Infrastructure.Configuration
             services.AddDbContext<AppDbContext>(options =>
                  options.UseSqlServer(config.GetConnectionString("Default"))
              );
+
+            services.Configure<IdentityOptions>(options =>
+            {
+                // Password
+                options.Password.RequireDigit = true;
+                options.Password.RequireUppercase = true;
+                options.Password.RequiredLength = 6;
+
+                // Lockout
+                options.Lockout.MaxFailedAccessAttempts = 5;
+                options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5);
+                options.Lockout.AllowedForNewUsers = true;
+
+                // User
+                options.User.RequireUniqueEmail = true;
+
+                // Signin
+                options.SignIn.RequireConfirmedEmail = true;
+            });
             #endregion
 
             services.AddScoped<IUserRepository, UserRepository>();
             services.AddScoped<IUserQueryRepository, UserQueryRepository>();
+
+            services.AddScoped<ITokenService, TokenService>();
+            services.AddScoped<IIdentityService, IdentityService>();
+
+            services.AddScoped<IEmailService, EmailService>();
 
             return services;
         }

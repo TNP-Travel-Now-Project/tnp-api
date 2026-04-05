@@ -1,8 +1,8 @@
-﻿using AuthApi.Domain.Entities;
+﻿using User = AuthApi.Domain.Entities.Users;
 using AuthApi.Domain.Interfaces;
-using Microsoft.EntityFrameworkCore;
 
-namespace AuthApi.Infrastructure.Persistence.Repositories
+
+namespace AuthApi.Infrastructure.Persistence.Repositories.Users
 {
     public class UserRepository : IUserRepository
     {
@@ -10,7 +10,7 @@ namespace AuthApi.Infrastructure.Persistence.Repositories
 
         public UserRepository(AppDbContext dbContext) => _dbContext = dbContext;
 
-        public async Task<Users> AddAsync(Users user)
+        public async Task<User> AddAsync(User user)
         {
             //await _dbContext.Users.AddAsync(user);
             return user;
@@ -21,10 +21,10 @@ namespace AuthApi.Infrastructure.Persistence.Repositories
             return await _dbContext.SaveChangesAsync();
         }
 
-        public async Task<Users?> GetUserByIdAsync(Guid id)
+        public async Task<User?> GetUserByIdAsync(Guid id)
         {
             //return await _dbContext.Users.FirstOrDefaultAsync(p => p.Id == id);
-            return new Users();
+            return new User();
         }
     }
 }

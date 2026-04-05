@@ -1,6 +1,6 @@
-﻿using AuthApi.Application.Features.Auth.DTOs;
+﻿using AuthApi.Application.Features.Auth.DTOs.Token;
 
-namespace AuthApi.Application.Abstractions.Repositories.Identities
+namespace AuthApi.Application.Abstractions.Repositories.Auth
 {
     public interface ITokenService
     {
