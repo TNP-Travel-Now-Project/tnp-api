@@ -16,6 +16,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
+	  <Folder Include="Abstractions\Messaging\Behavior\" />
 	  <Folder Include="Features\Users\Commands\CreateUser\" />
 	</ItemGroup>
 

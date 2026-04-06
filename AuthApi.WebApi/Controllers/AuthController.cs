@@ -1,5 +1,6 @@
 ﻿using AuthApi.Application.Features.Auth.Commands.CreateUser;
 using AuthApi.Application.Features.Auth.Commands.Register;
+using AuthApi.Application.Features.Auth.Commands.VerifyEmail;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 
@@ -12,9 +13,16 @@ namespace AuthApi.WebApi.Controllers
         [HttpPost("register")]
         public async Task<ActionResult> Register(RegisterCommand command)
         {
-            var id = await mediator.Send(command);
+            var result = await mediator.Send(command);
 
-            return Created($"/api/auth/{id}", new { id });
+            if (result.Value == null)
+            {
+                return BadRequest(result);
+            }
+
+            var userId = result.Value.UserId;
+
+            return Created($"/api/auth/{userId}", new { userId });
         }
 
         [HttpGet("login")]
@@ -23,6 +31,14 @@ namespace AuthApi.WebApi.Controllers
             var result = await mediator.Send(command);
 
             return Ok(result);
+        }
+
+        [HttpGet("verify-email")]
+        public async Task<ActionResult> VerifyEmail([FromQuery] Guid userId, [FromQuery] string token)
+        {
+            var result = await mediator.Send(new VerifyEmailCommand(userId, token));
+
+            return result.IsSuccess ? Ok(result) : BadRequest(result);
         }
     }
 }

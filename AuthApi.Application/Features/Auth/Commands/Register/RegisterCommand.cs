@@ -1,7 +1,6 @@
-﻿using AuthApi.Application.Abstractions.Messaging;
+﻿using AuthApi.Application.Abstractions.Messaging.Command;
 using AuthApi.Application.Common;
 using AuthApi.Application.Features.Auth.DTOs.Register;
-using AuthApi.Domain.Enums;
 
 namespace AuthApi.Application.Features.Auth.Commands.Register
 {

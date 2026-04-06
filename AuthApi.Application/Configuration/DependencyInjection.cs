@@ -1,4 +1,7 @@
-﻿using FluentValidation;
+﻿using AuthApi.Application.Common;
+using AuthApi.Application.Common.Behavior;
+using FluentValidation;
+using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace AuthApi.Application.Configuration
@@ -13,6 +16,16 @@ namespace AuthApi.Application.Configuration
             services.AddMediatR(config => config.RegisterServicesFromAssembly(currentAssembly));
 
             services.AddValidatorsFromAssembly(currentAssembly);
+
+            #region Register Pipeline Behavior
+            services.AddMediatR(cfg =>
+                cfg.RegisterServicesFromAssemblyContaining<ApplicationAssembly>()
+             );
+
+            services.AddValidatorsFromAssemblyContaining<ApplicationAssembly>();
+
+            services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
+            #endregion
 
             return services;
         }

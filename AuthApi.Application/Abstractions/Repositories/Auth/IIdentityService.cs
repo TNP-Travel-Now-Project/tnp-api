@@ -9,6 +9,6 @@ namespace AuthApi.Application.Abstractions.Repositories.Auth
     {
         //Task<Result<RegisterResponse>> GetUsersAsync(RegisterCommand req);
         Task<Result<RegisterResponse>> RegisterAsync(RegisterCommand req);
-        Task<Result<bool>> VerifyEmailAsync(RegisterCommand req);
+        Task<Result<bool>> VerifyEmailAsync(Guid userId, string token);
     }
 }

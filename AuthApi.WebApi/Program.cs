@@ -2,6 +2,7 @@ using AuthApi.Application.Configuration;
 using AuthApi.Infrastructure.Common;
 using AuthApi.Infrastructure.Configuration;
 using AuthApi.Infrastructure.Identities;
+using AuthApi.Infrastructure.Identities.Seeds;
 using AuthApi.Infrastructure.Persistence;
 using Hangfire;
 using Hangfire.SqlServer;
@@ -11,7 +12,7 @@ namespace AuthApi.WebApi
 {
     public class Program
     {
-        public static void Main(string[] args)
+        public static async Task Main(string[] args)
         {
             var builder = WebApplication.CreateBuilder(args);
 
@@ -24,9 +25,10 @@ namespace AuthApi.WebApi
             builder.Services.AddApplication()
                             .AddInfrastructure(builder.Configuration);
 
-            builder.Services.AddDataProtection();
-
-            builder.Services.AddIdentityCore<ApplicationUser>()
+            builder.Services.AddIdentityCore<ApplicationUser>(ops =>
+                            {
+                                ops.SignIn.RequireConfirmedEmail = true; // bat buoc verify email
+                            })
                             .AddRoles<IdentityRole<Guid>>()
                             .AddEntityFrameworkStores<AppDbContext>()
                             .AddDefaultTokenProviders();
@@ -46,12 +48,34 @@ namespace AuthApi.WebApi
                       });
             });
 
+            builder.Services.Configure<DataProtectionTokenProviderOptions>(options =>
+            {
+                options.TokenLifespan = TimeSpan.FromHours(2);
+            });
+
             builder.Services.AddHangfireServer();
+
+            builder.Services.AddAuthentication(options =>
+            {
+                options.DefaultAuthenticateScheme = "Bearer";
+                options.DefaultChallengeScheme = "Bearer";
+            });
 
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen();
 
             var app = builder.Build();
+
+            #region Seeds role
+            using (var scope = app.Services.CreateScope())
+            {
+                var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
+                var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+
+                await RoleSeeder.SeedAsync(roleManager);
+                await RoleSeeder.SeedAdminAsync(userManager, roleManager);
+            }
+            #endregion
 
             if (app.Environment.IsDevelopment())
             {
@@ -64,9 +88,9 @@ namespace AuthApi.WebApi
 
             app.UseHttpsRedirection();
 
-            app.UseAuthorization();
-
             app.UseAuthentication();
+
+            app.UseAuthorization();
 
             app.MapControllers();
 

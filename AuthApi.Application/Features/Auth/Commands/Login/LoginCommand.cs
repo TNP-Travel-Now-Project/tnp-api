@@ -1,4 +1,4 @@
-﻿using AuthApi.Application.Abstractions.Messaging;
+﻿using AuthApi.Application.Abstractions.Messaging.Command;
 using AuthApi.Domain.Enums;
 
 namespace AuthApi.Application.Features.Auth.Commands.CreateUser

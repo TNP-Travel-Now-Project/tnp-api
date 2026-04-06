@@ -1,15 +1,19 @@
 ﻿using AuthApi.Application.Abstractions.Repositories;
 using AuthApi.Application.Abstractions.Repositories.Auth;
 using AuthApi.Application.Abstractions.Repositories.Email;
+using AuthApi.Application.Features.Auth.Commands.Register;
 using AuthApi.Domain.Interfaces;
 using AuthApi.Infrastructure.Identities;
+using AuthApi.Infrastructure.Identities.Seeds;
 using AuthApi.Infrastructure.Persistence;
 using AuthApi.Infrastructure.Persistence.Connection;
 using AuthApi.Infrastructure.Persistence.Repositories.Users;
 using AuthApi.Infrastructure.Services.Email;
+using FluentValidation;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Migrations.Operations;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using SqlKata.Compilers;
@@ -62,9 +66,11 @@ namespace AuthApi.Infrastructure.Configuration
 
                 // Signin
                 options.SignIn.RequireConfirmedEmail = true;
+
             });
             #endregion
 
+            #region Service DI
             services.AddScoped<IUserRepository, UserRepository>();
             services.AddScoped<IUserQueryRepository, UserQueryRepository>();
 
@@ -72,6 +78,11 @@ namespace AuthApi.Infrastructure.Configuration
             services.AddScoped<IIdentityService, IdentityService>();
 
             services.AddScoped<IEmailService, EmailService>();
+            #endregion
+
+            #region FluentValidation DI
+            services.AddValidatorsFromAssemblyContaining<RegisterCommandValidator>();
+            #endregion
 
             return services;
         }

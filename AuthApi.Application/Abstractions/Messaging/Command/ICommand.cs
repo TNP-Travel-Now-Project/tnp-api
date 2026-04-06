@@ -1,6 +1,6 @@
 ﻿using MediatR;
 
-namespace AuthApi.Application.Abstractions.Messaging
+namespace AuthApi.Application.Abstractions.Messaging.Command
 {
     public interface ICommand : IRequest;
 

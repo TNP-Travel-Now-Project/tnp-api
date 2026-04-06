@@ -1,6 +1,6 @@
 ﻿using AuthApi.Domain.Interfaces;
-using AuthApi.Application.Abstractions.Messaging;
 using User = AuthApi.Domain.Entities.Users;
+using AuthApi.Application.Abstractions.Messaging.Command;
 
 namespace AuthApi.Application.Features.Auth.Commands.CreateUser
 {
