@@ -27,7 +27,7 @@ namespace AuthApi.Infrastructure.Persistence
                     .IsRequired();
 
                 user.Property(p => p.Age)
-                   .HasConversion(ageUserConverter)
+                   //.HasConversion(ageUserConverter)
                    .HasColumnName("Age")
                    .IsRequired();
 

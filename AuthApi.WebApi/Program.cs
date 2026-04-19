@@ -21,11 +21,8 @@ namespace AuthApi.WebApi
             var builder = WebApplication.CreateBuilder(args);
 
             builder.Services.AddControllers();
-
             builder.Services.AddHttpContextAccessor();
-
-            var connectionString =
-                builder.Configuration.GetConnectionString("Default");
+            var connectionString = builder.Configuration.GetConnectionString("Default");
 
             builder.Services.Configure<AppSettings>(
                  builder.Configuration.GetSection("AppSettings")
@@ -123,6 +120,7 @@ namespace AuthApi.WebApi
                 options.DefaultAuthenticateScheme = "Bearer";
                 options.DefaultChallengeScheme = "Bearer";
             });
+
 
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen();

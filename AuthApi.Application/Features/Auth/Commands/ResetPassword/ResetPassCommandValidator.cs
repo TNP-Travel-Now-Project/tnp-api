@@ -1,8 +1,8 @@
 ﻿using FluentValidation;
 
-namespace AuthApi.Application.Features.Auth.Commands.Login
+namespace AuthApi.Application.Features.Auth.Commands.ResetPassword
 {
-    public class ResetPassCommandValidator : AbstractValidator<LoginCommand>
+    public class ResetPassCommandValidator : AbstractValidator<ResetPasswordCommand>
     {
         public ResetPassCommandValidator()
         {
@@ -10,7 +10,11 @@ namespace AuthApi.Application.Features.Auth.Commands.Login
                 .NotEmpty().WithMessage("Email is not empty")
                 .EmailAddress().WithMessage("Email wrong format");
 
-            RuleFor(p => p.Password)
+            RuleFor(p => p.Otp)
+                .NotEmpty().WithMessage("OTP is not empty")
+                .Length(4).WithMessage("OTP code must have 4 digits");
+
+            RuleFor(p => p.NewPass)
                 .NotEmpty().WithMessage("Password is not empty")
                 .Length(8, 20)
                 .Matches("[A-Z]").WithMessage("Password must contain at least one uppercase letter")

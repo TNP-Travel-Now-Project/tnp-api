@@ -1,4 +1,5 @@
-﻿using AuthApi.Application.Abstractions.Interfaces.Repositories;
+﻿using AuthApi.Application.Abstractions.Interfaces.Email;
+using AuthApi.Application.Abstractions.Interfaces.Repositories;
 using AuthApi.Application.Abstractions.Repositories.Auth;
 using AuthApi.Application.Abstractions.Repositories.Email;
 using AuthApi.Application.Features.Auth.Commands.Register;
@@ -10,6 +11,8 @@ using AuthApi.Infrastructure.Services.Auth;
 using AuthApi.Infrastructure.Services.Email;
 using AuthApi.Infrastructure.Services.Token;
 using FluentValidation;
+using Hangfire;
+using Hangfire.Redis.StackExchange;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
@@ -17,6 +20,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using SqlKata.Compilers;
 using SqlKata.Execution;
+using StackExchange.Redis;
 using System.Data;
 
 namespace AuthApi.Infrastructure.Configuration
@@ -76,10 +80,52 @@ namespace AuthApi.Infrastructure.Configuration
             services.AddScoped<IIdentityService, IdentityService>();
 
             services.AddScoped<IEmailService, EmailService>();
+            services.AddScoped<IEmailChecker, EmailChecker>();
             #endregion
 
             #region FluentValidation DI
             services.AddValidatorsFromAssemblyContaining<RegisterCommandValidator>();
+            #endregion
+
+            #region Redis config
+           var redisConnectionString = config.GetConnectionString("Redis");
+            if (redisConnectionString == null)
+                throw new InvalidOperationException("Redis connection string is not configured.");
+
+            var redisOptions = ConfigurationOptions.Parse(redisConnectionString);
+
+            // config performance
+            redisOptions.SyncTimeout = 10000;
+            redisOptions.ConnectTimeout = 10000;
+
+            // nếu Redis cloud
+            redisOptions.SslProtocols =
+                System.Security.Authentication.SslProtocols.Tls12 |
+                System.Security.Authentication.SslProtocols.Tls13;
+
+            // tạo connection singleton
+            var redis = ConnectionMultiplexer.Connect(redisOptions);
+
+            // đăng ký Redis dùng chung toàn hệ thống
+            services.AddSingleton<IConnectionMultiplexer>(redis);
+
+            // REDIS CACHE
+            services.AddStackExchangeRedisCache(options =>
+            {
+                options.Configuration = redisConnectionString;
+            });
+
+            // SIGNALR REDIS BACKPLANE
+            services.AddSignalR()
+                .AddStackExchangeRedis(redisConnectionString);
+
+            // HANGFIRE REDIS STORAGE
+            services.AddHangfire(config =>
+            {
+                config.UseRedisStorage(redisConnectionString);
+            });
+
+            services.AddHangfireServer();
             #endregion
 
             return services;
