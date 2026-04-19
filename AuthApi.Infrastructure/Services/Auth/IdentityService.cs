@@ -1,18 +1,21 @@
 ﻿using AuthApi.Application.Abstractions.Repositories.Auth;
 using AuthApi.Application.Abstractions.Repositories.Email;
 using AuthApi.Application.Common;
+using AuthApi.Application.Features.Auth.Commands.Login;
 using AuthApi.Application.Features.Auth.Commands.Register;
+using AuthApi.Application.Features.Auth.DTOs.Login;
 using AuthApi.Application.Features.Auth.DTOs.Register;
-using AuthApi.Application.Features.Users.DTOs;
+using AuthApi.Application.Features.Auth.DTOs.Token;
 using AuthApi.Infrastructure.Common;
+using AuthApi.Infrastructure.Identities;
 using AuthApi.Infrastructure.Services.Email;
 using Hangfire;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore.Storage.Json;
 using Microsoft.Extensions.Options;
-using System.Security.Principal;
+using Microsoft.VisualBasic;
+using System.Data;
 
-namespace AuthApi.Infrastructure.Identities
+namespace AuthApi.Infrastructure.Services.Auth
 {
     public class IdentityService(
         ITokenService _tokenService,
@@ -21,15 +24,60 @@ namespace AuthApi.Infrastructure.Identities
         IBackgroundJobClient _jobClient,
         IOptions<AppSettings> _appSetting) : IIdentityService
     {
+        public async Task<Result<LoginResponse>> LoginAsync(LoginCommand req)
+        {
+            var user = await _userManager.FindByEmailAsync(req.Email);
+            if (user == null)
+                return Result<LoginResponse>.Fail("Invalid credentials");
+
+            if (await _userManager.IsLockedOutAsync(user))
+                return Result<LoginResponse>.Fail("User is locked");
+
+            if (!user.EmailConfirmed)
+                return Result<LoginResponse>.Fail("Email is not confirm");
+
+            if (!await _userManager.CheckPasswordAsync(user, req.Password))
+            {
+                await _userManager.AccessFailedAsync(user);
+                return Result<LoginResponse>.Fail("Invalid credentials");
+            }
+
+            await _userManager.ResetAccessFailedCountAsync(user);
+
+            var roles = await _userManager.GetRolesAsync(user);
+            string roleName = string.Join(", ", roles);
+
+            var userDto = new AuthUserDto
+            {
+                Id = user.Id,
+                Email = user.Email ?? string.Empty,
+                FullName = user.FullName,
+                Role = roleName
+            };
+
+            var token = await _tokenService.GenerateTokensAsync(userDto, roles);
+
+            return Result<LoginResponse>.Success(
+                new LoginResponse(
+                    accessToken: token.AccessToken,
+                    refreshToken: null,
+                    expired: token.AccessTokenExpiresAt,
+                    userId: user.Id,
+                    email: user.Email!,
+                    role: roleName)
+            );
+        }
+
         public async Task<Result<RegisterResponse>> RegisterAsync(RegisterCommand req)
         {
+
             var user = new ApplicationUser(
                 fullName: req.FullName,
                 age: req.Age,
                 email: req.Email,
                 userName: req.UserName);
 
-            var result = await _userManager.CreateAsync(user, req.password);
+            var result = await _userManager.CreateAsync(user, req.Password);
 
             if (!result.Succeeded)
             {
@@ -42,9 +90,10 @@ namespace AuthApi.Infrastructure.Identities
             var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
 
             var confirmLink =
-            $"{_appSetting.Value.FrontendUrl}/api/auths/verify-email?userId={user.Id}&token={Uri.EscapeDataString(token)}";
+            $"{_appSetting.Value.FrontendUrl}/api/auth/verify-email?userId={user.Id}&token={Uri.EscapeDataString(token)}";
 
-            _jobClient.Enqueue(() => _emailService.SendEmailAsync(
+            _jobClient.Enqueue(() =>
+            _emailService.SendEmailAsync(
                 user.Email!,
                 "Verify your email",
                 $"Click to verify: <a href='{confirmLink}'>Verify Email</a>"));

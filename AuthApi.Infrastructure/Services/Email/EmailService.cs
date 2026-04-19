@@ -22,7 +22,7 @@ namespace AuthApi.Infrastructure.Services.Email
 
             var mail = new MailMessage(from, to, subject, body)
             {
-                IsBodyHtml = true
+                IsBodyHtml = true,
             };
 
             await client.SendMailAsync(mail);

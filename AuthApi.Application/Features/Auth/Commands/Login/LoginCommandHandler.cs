@@ -1,20 +1,15 @@
-﻿using AuthApi.Domain.Interfaces;
-using User = AuthApi.Domain.Entities.Users;
-using AuthApi.Application.Abstractions.Messaging.Command;
+﻿using AuthApi.Application.Abstractions.Messaging.Command;
+using AuthApi.Application.Abstractions.Repositories.Auth;
+using AuthApi.Application.Common;
+using AuthApi.Application.Features.Auth.DTOs.Login;
 
-namespace AuthApi.Application.Features.Auth.Commands.CreateUser
+namespace AuthApi.Application.Features.Auth.Commands.Login
 {
-    public class LoginCommandHandler(IUserRepository repoUser) : ICommandHandler<LoginCommand, Guid>
+    public class LoginCommandhandler(IIdentityService _identities) : ICommandHandler<LoginCommand, Result<LoginResponse>>
     {
-        public async Task<Guid> Handle(LoginCommand req, CancellationToken cancellationToken)
+        public async Task<Result<LoginResponse>> Handle(LoginCommand request, CancellationToken cancellationToken)
         {
-            var user = User.Create(req.Age, req.Role, req.Name);
-
-            await repoUser.AddAsync(user);
-
-            await repoUser.CommitAsync();
-
-            return user.Id;
+            return await _identities.LoginAsync(request);
         }
     }
 }

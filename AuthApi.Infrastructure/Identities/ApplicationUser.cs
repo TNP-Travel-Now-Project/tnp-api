@@ -1,5 +1,4 @@
-﻿using AuthApi.Domain.Enums;
-using AuthApi.Domain.ObjectValues;
+﻿using AuthApi.Domain.ObjectValues;
 using Microsoft.AspNetCore.Identity;
 
 namespace AuthApi.Infrastructure.Identities

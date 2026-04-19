@@ -1,4 +1,4 @@
-﻿using AuthApi.Application.Abstractions.Repositories;
+﻿using AuthApi.Application.Abstractions.Interfaces.Repositories;
 using AuthApi.Application.Features.Users.DTOs;
 using Microsoft.AspNetCore.Mvc;
 using System.Collections.Specialized;

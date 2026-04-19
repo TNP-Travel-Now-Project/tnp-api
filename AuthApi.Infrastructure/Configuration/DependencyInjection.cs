@@ -1,19 +1,18 @@
-﻿using AuthApi.Application.Abstractions.Repositories;
+﻿using AuthApi.Application.Abstractions.Interfaces.Repositories;
 using AuthApi.Application.Abstractions.Repositories.Auth;
 using AuthApi.Application.Abstractions.Repositories.Email;
 using AuthApi.Application.Features.Auth.Commands.Register;
 using AuthApi.Domain.Interfaces;
-using AuthApi.Infrastructure.Identities;
-using AuthApi.Infrastructure.Identities.Seeds;
 using AuthApi.Infrastructure.Persistence;
 using AuthApi.Infrastructure.Persistence.Connection;
 using AuthApi.Infrastructure.Persistence.Repositories.Users;
+using AuthApi.Infrastructure.Services.Auth;
 using AuthApi.Infrastructure.Services.Email;
+using AuthApi.Infrastructure.Services.Token;
 using FluentValidation;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Migrations.Operations;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using SqlKata.Compilers;
@@ -46,7 +45,7 @@ namespace AuthApi.Infrastructure.Configuration
 
             #region EFCore DI
             services.AddDbContext<AppDbContext>(options =>
-                 options.UseSqlServer(config.GetConnectionString("Default"))
+                 options.UseNpgsql(config.GetConnectionString("Default"))
              );
 
             services.Configure<IdentityOptions>(options =>
@@ -57,16 +56,15 @@ namespace AuthApi.Infrastructure.Configuration
                 options.Password.RequiredLength = 6;
 
                 // Lockout
-                options.Lockout.MaxFailedAccessAttempts = 5;
-                options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5);
                 options.Lockout.AllowedForNewUsers = true;
+                options.Lockout.MaxFailedAccessAttempts = 5;
+                options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(10);
 
                 // User
                 options.User.RequireUniqueEmail = true;
 
                 // Signin
                 options.SignIn.RequireConfirmedEmail = true;
-
             });
             #endregion
 

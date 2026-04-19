@@ -1,5 +1,5 @@
-﻿using AuthApi.Application.Abstractions.Messaging.Query;
-using AuthApi.Application.Abstractions.Repositories;
+﻿using AuthApi.Application.Abstractions.Interfaces.Repositories;
+using AuthApi.Application.Abstractions.Messaging.Query;
 using AuthApi.Application.Features.Users.DTOs;
 
 namespace AuthApi.Application.Features.Users.Queries.GetUsers

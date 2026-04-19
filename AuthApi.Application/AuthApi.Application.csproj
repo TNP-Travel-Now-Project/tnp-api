@@ -7,6 +7,12 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+	  <Compile Remove="Abstractions\Messaging\Behavior\**" />
+	  <EmbeddedResource Remove="Abstractions\Messaging\Behavior\**" />
+	  <None Remove="Abstractions\Messaging\Behavior\**" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="12.1.1" />
 		<PackageReference Include="MediatR" Version="12.1.1" />
 	</ItemGroup>
@@ -16,7 +22,6 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <Folder Include="Abstractions\Messaging\Behavior\" />
 	  <Folder Include="Features\Users\Commands\CreateUser\" />
 	</ItemGroup>
 

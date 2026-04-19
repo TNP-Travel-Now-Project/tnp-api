@@ -5,8 +5,12 @@ using AuthApi.Infrastructure.Identities;
 using AuthApi.Infrastructure.Identities.Seeds;
 using AuthApi.Infrastructure.Persistence;
 using Hangfire;
-using Hangfire.SqlServer;
+using Hangfire.PostgreSql;
 using Microsoft.AspNetCore.Identity;
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+
 
 namespace AuthApi.WebApi
 {
@@ -18,9 +22,71 @@ namespace AuthApi.WebApi
 
             builder.Services.AddControllers();
 
+            builder.Services.AddHttpContextAccessor();
+
+            var connectionString =
+                builder.Configuration.GetConnectionString("Default");
+
             builder.Services.Configure<AppSettings>(
                  builder.Configuration.GetSection("AppSettings")
             );
+
+            var jwtSettings = builder.Configuration.GetSection("AppSettings");
+            var key = Encoding.UTF8.GetBytes(jwtSettings["JwtKey"]!);
+
+            builder.Services.AddAuthentication(options =>
+            {
+                options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+                options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+            })
+
+            .AddJwtBearer(options =>
+            {
+                options.TokenValidationParameters = new TokenValidationParameters
+                {
+                    ValidateIssuer = true,
+                    ValidateAudience = true,
+                    ValidateLifetime = true,
+                    ValidateIssuerSigningKey = true,
+                    ValidIssuer = jwtSettings["JwtIssuer"],
+                    ValidAudience = jwtSettings["JwtAudience"],
+                    IssuerSigningKey = new SymmetricSecurityKey(key),
+                    ClockSkew = TimeSpan.Zero   // Không cho phép lệch giờ (production yêu cầu strict)
+                };
+
+                // Xử lý sự kiện (custom response)
+                options.Events = new JwtBearerEvents
+                {
+                    OnAuthenticationFailed = context =>
+                    {
+                        // Log lỗi (không lộ chi tiết cho client)
+                        Console.WriteLine($"Authentication failed: {context.Exception.Message}");
+
+                        if (context.Exception is SecurityTokenExpiredException)
+                        {
+                            context.Response.Headers.Append("Token-Expired", "true");
+                        }
+
+                        return Task.CompletedTask;
+                    },
+
+                    OnChallenge = context =>
+                    {
+                        // Tùy chỉnh response khi không có token hoặc token invalid
+                        context.HandleResponse(); // Ngăn chặn response mặc định
+                        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                        context.Response.ContentType = "application/json";
+
+                        var result = System.Text.Json.JsonSerializer.Serialize(new
+                        {
+                            error = "unauthorized",
+                            message = "You must provide a valid access token."
+                        });
+
+                        return context.Response.WriteAsync(result);
+                    }
+                };
+            });
 
             builder.Services.AddApplication()
                             .AddInfrastructure(builder.Configuration);
@@ -33,18 +99,15 @@ namespace AuthApi.WebApi
                             .AddEntityFrameworkStores<AppDbContext>()
                             .AddDefaultTokenProviders();
 
+
             builder.Services.AddHangfire(config =>
             {
-                config.SetDataCompatibilityLevel(CompatibilityLevel.Version_170)
+                config.SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
                       .UseSimpleAssemblyNameTypeSerializer()
                       .UseRecommendedSerializerSettings()
-                      .UseSqlServerStorage(builder.Configuration.GetConnectionString("Default"), new SqlServerStorageOptions
+                      .UsePostgreSqlStorage(options =>
                       {
-                          CommandBatchMaxTimeout = TimeSpan.FromMinutes(5),
-                          SlidingInvisibilityTimeout = TimeSpan.FromMinutes(5),
-                          QueuePollInterval = TimeSpan.Zero,
-                          UseRecommendedIsolationLevel = true,
-                          DisableGlobalLocks = true
+                          options.UseNpgsqlConnection(connectionString); 
                       });
             });
 
@@ -79,7 +142,6 @@ namespace AuthApi.WebApi
 
             if (app.Environment.IsDevelopment())
             {
-                //app.MapOpenApi();
                 app.UseSwagger();
                 app.UseSwaggerUI();
             }
