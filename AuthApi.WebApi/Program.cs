@@ -3,13 +3,13 @@ using AuthApi.Infrastructure.Common;
 using AuthApi.Infrastructure.Configuration;
 using AuthApi.Infrastructure.Identities;
 using AuthApi.Infrastructure.Identities.Seeds;
-using AuthApi.Infrastructure.Persistence;
 using Hangfire;
-using Hangfire.PostgreSql;
 using Microsoft.AspNetCore.Identity;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using AuthApi.Infrastructure.Services.Auth;
+using Microsoft.OpenApi;
 
 
 namespace AuthApi.WebApi
@@ -21,13 +21,39 @@ namespace AuthApi.WebApi
             var builder = WebApplication.CreateBuilder(args);
 
             builder.Services.AddControllers();
+
             builder.Services.AddHttpContextAccessor();
+
             var connectionString = builder.Configuration.GetConnectionString("Default");
+            if (string.IsNullOrEmpty(connectionString))
+                throw new Exception("Connectstring invalid");
 
             builder.Services.Configure<AppSettings>(
                  builder.Configuration.GetSection("AppSettings")
             );
 
+            builder.Services.AddApplication()
+                            .AddInfrastructure(builder.Configuration, connectionString);
+
+            builder.Services.Configure<DataProtectionTokenProviderOptions>(options =>
+            {
+                options.TokenLifespan = TimeSpan.FromMinutes(30);
+            });
+
+            #region Config CORS
+            builder.Services.AddCors(options =>
+            {
+                options.AddPolicy("AllowNextJS",
+                    policy =>
+                    {
+                        policy.WithOrigins("http://localhost:3000")
+                              .AllowAnyMethod()
+                              .AllowAnyHeader();
+                    });
+            });
+            #endregion
+
+            #region config JWT
             var jwtSettings = builder.Configuration.GetSection("AppSettings");
             var key = Encoding.UTF8.GetBytes(jwtSettings["JwtKey"]!);
 
@@ -84,46 +110,36 @@ namespace AuthApi.WebApi
                     }
                 };
             });
+            #endregion
 
-            builder.Services.AddApplication()
-                            .AddInfrastructure(builder.Configuration);
-
-            builder.Services.AddIdentityCore<ApplicationUser>(ops =>
-                            {
-                                ops.SignIn.RequireConfirmedEmail = true; // bat buoc verify email
-                            })
-                            .AddRoles<IdentityRole<Guid>>()
-                            .AddEntityFrameworkStores<AppDbContext>()
-                            .AddDefaultTokenProviders();
-
-
-            builder.Services.AddHangfire(config =>
-            {
-                config.SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
-                      .UseSimpleAssemblyNameTypeSerializer()
-                      .UseRecommendedSerializerSettings()
-                      .UsePostgreSqlStorage(options =>
-                      {
-                          options.UseNpgsqlConnection(connectionString); 
-                      });
-            });
-
-            builder.Services.Configure<DataProtectionTokenProviderOptions>(options =>
-            {
-                options.TokenLifespan = TimeSpan.FromHours(2);
-            });
-
-            builder.Services.AddHangfireServer();
-
-            builder.Services.AddAuthentication(options =>
-            {
-                options.DefaultAuthenticateScheme = "Bearer";
-                options.DefaultChallengeScheme = "Bearer";
-            });
-
-
+            #region Add Authorize for swagger
             builder.Services.AddEndpointsApiExplorer();
-            builder.Services.AddSwaggerGen();
+
+            builder.Services.AddSwaggerGen(options =>
+            {
+                options.SwaggerDoc("v1", new OpenApiInfo
+                {
+                    Title = "Your API Title",
+                    Version = "v1",
+                    Description = "ASP.NET Core Web API với Google OAuth + JWT"
+                });
+
+                options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+                {
+                    Name = "Authorization",
+                    Type = SecuritySchemeType.Http,
+                    Scheme = "Bearer",
+                    BearerFormat = "JWT",
+                    In = ParameterLocation.Header,
+                    Description = "Nhập JWT token theo định dạng: Bearer {token}\nVí dụ: Bearer eyJhbGciOiJIUzI1NiIs..."
+                });
+
+                options.AddSecurityRequirement(document => new OpenApiSecurityRequirement
+                {
+                    [new OpenApiSecuritySchemeReference("Bearer", document)] = []
+                });
+            });
+            #endregion
 
             var app = builder.Build();
 
@@ -142,9 +158,16 @@ namespace AuthApi.WebApi
             {
                 app.UseSwagger();
                 app.UseSwaggerUI();
+                app.UseExceptionHandler("/error"); //global error handler
             }
 
-            app.UseHangfireDashboard("/hangfire");
+            app.UseHangfireDashboard("/hangfire", new DashboardOptions
+            {
+                Authorization = new[] { new HangfireAuthFilter() },
+                DashboardTitle = "Hangfire – Admin"
+            });
+
+            app.UseCors("AllowNextJS");
 
             app.UseHttpsRedirection();
 

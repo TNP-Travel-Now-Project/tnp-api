@@ -3,12 +3,13 @@ using AuthApi.Application.Features.Auth.Commands.Register;
 using AuthApi.Application.Features.Auth.Commands.ResetPassword;
 using AuthApi.Application.Features.Auth.Commands.SendOTP;
 using AuthApi.Application.Features.Auth.Commands.VerifyEmail;
-using AuthApi.Domain.ObjectValues;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace AuthApi.WebApi.Controllers
 {
+    [AllowAnonymous]
     [Route("api/auth"), ApiController]
     public class AuthController(IMediator mediator) : ControllerBase
     {

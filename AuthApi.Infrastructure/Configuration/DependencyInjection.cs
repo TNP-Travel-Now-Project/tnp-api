@@ -4,6 +4,7 @@ using AuthApi.Application.Abstractions.Repositories.Auth;
 using AuthApi.Application.Abstractions.Repositories.Email;
 using AuthApi.Application.Features.Auth.Commands.Register;
 using AuthApi.Domain.Interfaces;
+using AuthApi.Infrastructure.Identities;
 using AuthApi.Infrastructure.Persistence;
 using AuthApi.Infrastructure.Persistence.Connection;
 using AuthApi.Infrastructure.Persistence.Repositories.Users;
@@ -12,6 +13,7 @@ using AuthApi.Infrastructure.Services.Email;
 using AuthApi.Infrastructure.Services.Token;
 using FluentValidation;
 using Hangfire;
+using Hangfire.PostgreSql;
 using Hangfire.Redis.StackExchange;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.SqlClient;
@@ -28,7 +30,7 @@ namespace AuthApi.Infrastructure.Configuration
     public static class DependencyInjection
     {
         // Config DI Infrastructure Layer
-        public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration config)
+        public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration config, string connectionString)
         {
             #region SqlKata DI
             services.AddScoped<IDbConnection>(sp =>
@@ -70,6 +72,14 @@ namespace AuthApi.Infrastructure.Configuration
                 // Signin
                 options.SignIn.RequireConfirmedEmail = true;
             });
+
+            services.AddIdentityCore<ApplicationUser>(ops =>
+            {
+                ops.SignIn.RequireConfirmedEmail = true;
+
+            }).AddRoles<IdentityRole<Guid>>()
+              .AddEntityFrameworkStores<AppDbContext>()
+              .AddDefaultTokenProviders();
             #endregion
 
             #region Service DI
@@ -87,8 +97,8 @@ namespace AuthApi.Infrastructure.Configuration
             services.AddValidatorsFromAssemblyContaining<RegisterCommandValidator>();
             #endregion
 
-            #region Redis config
-           var redisConnectionString = config.GetConnectionString("Redis");
+            #region Redis Config
+            var redisConnectionString = config.GetConnectionString("Redis");
             if (redisConnectionString == null)
                 throw new InvalidOperationException("Redis connection string is not configured.");
 
@@ -122,7 +132,14 @@ namespace AuthApi.Infrastructure.Configuration
             // HANGFIRE REDIS STORAGE
             services.AddHangfire(config =>
             {
-                config.UseRedisStorage(redisConnectionString);
+                config.SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+                         .UseSimpleAssemblyNameTypeSerializer()
+                         .UseRecommendedSerializerSettings()
+                         .UsePostgreSqlStorage(options =>
+                         {
+                             options.UseNpgsqlConnection(connectionString);
+
+                         }).UseRedisStorage(redisConnectionString);
             });
 
             services.AddHangfireServer();
