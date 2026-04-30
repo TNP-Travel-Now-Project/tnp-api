@@ -53,6 +53,22 @@ namespace AuthApi.WebApi.Controllers
             var result = await mediator.Send(resetPass);
             return result.IsSuccess ? Ok(result) : BadRequest(result);
         }
+
+        // chua
+        [HttpPost("refresh-token")]
+        public async Task<ActionResult> RefreshToken(ResetPasswordCommand resetPass)
+        {
+            var result = await mediator.Send(resetPass);
+            return result.IsSuccess ? Ok(result) : BadRequest(result);
+        }
+
+        // chua
+        [HttpPost("logout")]
+        public async Task<ActionResult> Logout(ResetPasswordCommand resetPass)
+        {
+            var result = await mediator.Send(resetPass);
+            return result.IsSuccess ? Ok(result) : BadRequest(result);
+        }
     }
 }
     

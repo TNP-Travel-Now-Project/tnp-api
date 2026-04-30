@@ -4,5 +4,5 @@
         Guid UserId,
         string FullName,
         string Email,
-        DateTime CreateAt);
+        DateTime CreatedAt);
 }

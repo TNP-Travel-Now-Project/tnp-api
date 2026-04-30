@@ -1,4 +1,5 @@
-﻿using AuthApi.Application.Abstractions.Interfaces.Email;
+﻿using AuthApi.Application.Abstractions.Interfaces.Auth;
+using AuthApi.Application.Abstractions.Interfaces.Email;
 using AuthApi.Application.Abstractions.Interfaces.Repositories;
 using AuthApi.Application.Abstractions.Repositories.Auth;
 using AuthApi.Application.Abstractions.Repositories.Email;
@@ -88,6 +89,7 @@ namespace AuthApi.Infrastructure.Configuration
 
             services.AddScoped<ITokenService, TokenService>();
             services.AddScoped<IIdentityService, IdentityService>();
+            services.AddScoped<IAuthCookieService, AuthCookieService>();
 
             services.AddScoped<IEmailService, EmailService>();
             services.AddScoped<IEmailChecker, EmailChecker>();

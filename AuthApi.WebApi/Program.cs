@@ -9,7 +9,7 @@ using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using AuthApi.Infrastructure.Services.Auth;
-using Microsoft.OpenApi;
+using AuthApi.WebApi.Middlewares;
 
 
 namespace AuthApi.WebApi
@@ -23,6 +23,10 @@ namespace AuthApi.WebApi
             builder.Services.AddControllers();
 
             builder.Services.AddHttpContextAccessor();
+
+            // Nao day len prod thi them "!" cho isDev
+            var isDev = builder.Environment.IsDevelopment();
+            var feUrl = builder.Configuration["Frontend:Url"];
 
             var connectionString = builder.Configuration.GetConnectionString("Default");
             if (string.IsNullOrEmpty(connectionString))
@@ -46,14 +50,15 @@ namespace AuthApi.WebApi
                 options.AddPolicy("AllowNextJS",
                     policy =>
                     {
-                        policy.WithOrigins("http://localhost:3000")
+                        policy.WithOrigins(feUrl!)
                               .AllowAnyMethod()
-                              .AllowAnyHeader();
+                              .AllowAnyHeader()
+                              .AllowCredentials();
                     });
             });
             #endregion
 
-            #region config JWT
+            #region config JWTq
             var jwtSettings = builder.Configuration.GetSection("AppSettings");
             var key = Encoding.UTF8.GetBytes(jwtSettings["JwtKey"]!);
 
@@ -65,6 +70,8 @@ namespace AuthApi.WebApi
 
             .AddJwtBearer(options =>
             {
+                options.RequireHttpsMetadata = isDev;
+
                 options.TokenValidationParameters = new TokenValidationParameters
                 {
                     ValidateIssuer = true,
@@ -74,15 +81,13 @@ namespace AuthApi.WebApi
                     ValidIssuer = jwtSettings["JwtIssuer"],
                     ValidAudience = jwtSettings["JwtAudience"],
                     IssuerSigningKey = new SymmetricSecurityKey(key),
-                    ClockSkew = TimeSpan.Zero   // Không cho phép lệch giờ (production yêu cầu strict)
+                    ClockSkew = TimeSpan.Zero
                 };
 
-                // Xử lý sự kiện (custom response)
                 options.Events = new JwtBearerEvents
                 {
                     OnAuthenticationFailed = context =>
                     {
-                        // Log lỗi (không lộ chi tiết cho client)
                         Console.WriteLine($"Authentication failed: {context.Exception.Message}");
 
                         if (context.Exception is SecurityTokenExpiredException)
@@ -93,9 +98,20 @@ namespace AuthApi.WebApi
                         return Task.CompletedTask;
                     },
 
+                    OnMessageReceived = context =>
+                    {
+                        var token = context.Request.Cookies["accessToken"];
+
+                        if (!string.IsNullOrEmpty(token))
+                        {
+                            context.Token = token;
+                        }
+
+                        return Task.CompletedTask;
+                    },
+
                     OnChallenge = context =>
                     {
-                        // Tùy chỉnh response khi không có token hoặc token invalid
                         context.HandleResponse(); // Ngăn chặn response mặc định
                         context.Response.StatusCode = StatusCodes.Status401Unauthorized;
                         context.Response.ContentType = "application/json";
@@ -112,33 +128,30 @@ namespace AuthApi.WebApi
             });
             #endregion
 
+            #region Setup CookiePolicyOptions
+            builder.Services.Configure<CookiePolicyOptions>(options =>
+            {
+                options.MinimumSameSitePolicy = SameSiteMode.Unspecified;
+                options.OnAppendCookie = ctx =>
+                {
+                    ctx.CookieOptions.SameSite = SameSiteMode.None;
+                    ctx.CookieOptions.Secure = isDev;
+                    //ctx.CookieOptions.HttpOnly = true;
+                    ctx.CookieOptions.IsEssential = true;
+                    ctx.CookieOptions.Path = "/";
+                };
+
+                options.OnDeleteCookie = ctx =>
+                {
+                    ctx.CookieOptions.SameSite = SameSiteMode.None;
+                    ctx.CookieOptions.Secure = true;
+                };
+            });
+            #endregion 
+
             #region Add Authorize for swagger
             builder.Services.AddEndpointsApiExplorer();
-
-            builder.Services.AddSwaggerGen(options =>
-            {
-                options.SwaggerDoc("v1", new OpenApiInfo
-                {
-                    Title = "Your API Title",
-                    Version = "v1",
-                    Description = "ASP.NET Core Web API với Google OAuth + JWT"
-                });
-
-                options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
-                {
-                    Name = "Authorization",
-                    Type = SecuritySchemeType.Http,
-                    Scheme = "Bearer",
-                    BearerFormat = "JWT",
-                    In = ParameterLocation.Header,
-                    Description = "Nhập JWT token theo định dạng: Bearer {token}\nVí dụ: Bearer eyJhbGciOiJIUzI1NiIs..."
-                });
-
-                options.AddSecurityRequirement(document => new OpenApiSecurityRequirement
-                {
-                    [new OpenApiSecuritySchemeReference("Bearer", document)] = []
-                });
-            });
+            builder.Services.AddSwaggerGen();
             #endregion
 
             var app = builder.Build();
@@ -158,7 +171,7 @@ namespace AuthApi.WebApi
             {
                 app.UseSwagger();
                 app.UseSwaggerUI();
-                app.UseExceptionHandler("/error"); //global error handler
+                app.UseExceptionHandler("/error");
             }
 
             app.UseHangfireDashboard("/hangfire", new DashboardOptions
@@ -171,9 +184,13 @@ namespace AuthApi.WebApi
 
             app.UseHttpsRedirection();
 
+            app.UseCookiePolicy();
+
             app.UseAuthentication();
 
-            app.UseAuthorization();
+            app.UseMiddleware<CSRFMiddleware>();
+
+            app.UseAuthorization(); 
 
             app.MapControllers();
 

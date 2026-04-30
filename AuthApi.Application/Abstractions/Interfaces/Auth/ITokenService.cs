@@ -10,8 +10,6 @@ namespace AuthApi.Application.Abstractions.Repositories.Auth
             IList<string> roles, 
             int expiredDay = 15);
         Task<AuthResponse> RefreshTokenAsync();
-        void SetRefreshTokenCookie(string refreshToken, int days);
         Task RevokeRefreshTokenAsync();
-        void ClearRefreshTokenCookie();
     }
 }

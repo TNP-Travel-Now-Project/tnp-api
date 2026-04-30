@@ -1,4 +1,5 @@
-﻿using AuthApi.Application.Abstractions.Repositories.Auth;
+﻿using AuthApi.Application.Abstractions.Interfaces.Auth;
+using AuthApi.Application.Abstractions.Repositories.Auth;
 using AuthApi.Application.Features.Auth.DTOs.Auth;
 using AuthApi.Application.Features.Auth.DTOs.Auth.Token;
 using AuthApi.Infrastructure.Common;
@@ -20,30 +21,34 @@ namespace AuthApi.Infrastructure.Services.Token
         AppDbContext _dbContext,
         UserManager<ApplicationUser> _userManager,
         IHttpContextAccessor _httpContextAccessor,
-        IOptions<AppSettings> _appSetting) : ITokenService
+        IOptions<AppSettings> _appSetting,
+        IAuthCookieService _tokenHandler) : ITokenService
     {
-        public async Task<AuthResponse> GenerateTokensAsync(AuthUserDto user, IList<string> roles, int expired = 30)
+        public async Task<AuthResponse> GenerateTokensAsync(AuthUserDto user, IList<string> roles, int expiredDay = 30)
         {
-            var accessToken = GeneralJwtToken(user, roles, expired: 15);
-            var refreshTokenStr = GenerateRefreshTokenString();
+            int expiredMinute = 15;
+            var accessToken = GeneralJwtToken(user, roles, expired: expiredMinute);
+            var refreshToken = GenerateRefreshTokenString();
 
             var refreshTokenEntity = new RefreshToken
             {
                 UserId = user.Id,
-                Token = refreshTokenStr,
-                ExpiresAt = DateTime.UtcNow.AddDays(expired),
+                Token = refreshToken,
+                ExpiresAt = DateTime.UtcNow.AddDays(expiredDay),
                 IsRevoked = false
             };
 
             _dbContext.RefreshToken.Add(refreshTokenEntity);
             await _dbContext.SaveChangesAsync();
 
-            SetRefreshTokenCookie(refreshToken: refreshTokenStr, days: expired);
+            _tokenHandler.SetAccessToken(token: accessToken, minutes: expiredMinute);
+            _tokenHandler.SetRefreshToken(token: refreshToken, days: expiredDay);
+            _tokenHandler.SetCSRFToken(days: expiredDay);
 
             return new AuthResponse(
-                AccessToken: accessToken,
+                AccessToken: null,
                 RefreshToken: null,
-                AccessTokenExpiresAt: DateTime.UtcNow.AddMinutes(15));
+                AccessTokenExpiresAt: DateTime.UtcNow.AddMinutes(expiredMinute));
         }
 
         private string GeneralJwtToken(AuthUserDto user, IList<string> roles, int expired)
@@ -82,7 +87,7 @@ namespace AuthApi.Infrastructure.Services.Token
 
         public async Task<AuthResponse> RefreshTokenAsync()
         {
-            var refreshTokenToCookie = _httpContextAccessor.HttpContext?.Request.Cookies["refreshToken"] ?? null!;
+            var refreshTokenToCookie = _tokenHandler.GetRefreshToken();
             if (refreshTokenToCookie == null)
                 throw new SecurityTokenException("Refresh token is missing");
 
@@ -90,7 +95,7 @@ namespace AuthApi.Infrastructure.Services.Token
                                                                                         && p.ExpiresAt > DateTime.UtcNow
                                                                                         && !p.IsRevoked);
             if (refreshTokenEntity == null)
-                throw new SecurityTokenException("Invalid or expired refresh token");
+                throw new SecurityTokenException("Invalid or expiredDay refresh token");
 
             var user = await _userManager.FindByIdAsync(refreshTokenEntity.UserId.ToString());
 
@@ -122,35 +127,6 @@ namespace AuthApi.Infrastructure.Services.Token
 
             entity.IsRevoked = true;
             await _dbContext.SaveChangesAsync();
-        }
-
-        public void SetRefreshTokenCookie(string refreshToken, int days)
-        {
-            var context = _httpContextAccessor.HttpContext;
-            if (context == null) return;
-
-            var cookieOptions = new CookieOptions
-            {
-                Secure = true,
-                HttpOnly = true,
-                IsEssential = true,
-                SameSite = SameSiteMode.None,
-                Expires = DateTime.UtcNow.AddDays(days),
-                Path = "/"
-            };
-
-            context.Response.Cookies.Append("refreshToken", refreshToken, cookieOptions);
-        }
-
-        public void ClearRefreshTokenCookie()
-        {
-            var context = _httpContextAccessor.HttpContext;
-            if (context == null) return;
-
-            string refreshTokenToCookie = context.Request.Cookies["refreshToken"] ?? null!;
-            if (refreshTokenToCookie == null) return;
-
-            context?.Response.Cookies.Delete("refreshToken");
         }
     }
 }

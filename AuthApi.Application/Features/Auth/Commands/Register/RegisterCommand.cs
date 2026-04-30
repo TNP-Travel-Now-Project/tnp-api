@@ -10,5 +10,6 @@ namespace AuthApi.Application.Features.Auth.Commands.Register
         string FullName,
         string UserName,
         string PhoneNumber,
-        string Password) : ICommand<Result<RegisterResponse>>;
+        string Password,
+        string ConfirmPassword) : ICommand<Result<RegisterResponse>>;
 }

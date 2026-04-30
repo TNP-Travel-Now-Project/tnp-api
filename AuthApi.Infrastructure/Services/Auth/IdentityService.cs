@@ -68,7 +68,7 @@ namespace AuthApi.Infrastructure.Services.Auth
             return Result<LoginResponse>.Success(
                 new LoginResponse(
                     accessToken: token.AccessToken,
-                    refreshToken: null,
+                    refreshToken: token.RefreshToken,
                     expired: token.AccessTokenExpiresAt,
                     userId: user.Id,
                     email: user.Email!,
@@ -87,7 +87,6 @@ namespace AuthApi.Infrastructure.Services.Auth
                 userName: req.UserName);
 
             var result = await _userManager.CreateAsync(user, req.Password);
-
             if (!result.Succeeded)
             {
                 var errors = result.Errors.Select(e => e.Description).ToList();
@@ -97,19 +96,23 @@ namespace AuthApi.Infrastructure.Services.Auth
             await _userManager.AddToRoleAsync(user, "User");
 
             var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+            if (string.IsNullOrEmpty(token))
+                return Result<RegisterResponse>.Fail("Failed to generate email confirmation token");
 
             var confirmLink =
-            $"{_appSetting.Value.FrontendUrl}/api/auth/verify-email?userId={user.Id}&token={Uri.EscapeDataString(token)}";
+            $"{_appSetting.Value.FrontendUrl}/api/auth/verify-email" +
+                                                $"?userId={user.Id}" +
+                                                $"&token={Uri.EscapeDataString(token)}";
 
             _jobClient.Enqueue(() =>
-            _emailService.SendEmailAsync(
-                user.Email!,
-                "Verify your email",
-                $"Click to verify: <a href='{confirmLink}'>Verify Email</a>"));
+                _emailService.SendEmailAsync(
+                    user.Email!,
+                    "Verify your email",
+                    $"Click to verify: <a href='{confirmLink}'>Verify Email</a>")
+            );
 
             // Xoa user neu nhu chua xac minh
             _jobClient.Schedule<EmailCleanupJob>(p =>
-
                 p.DeleteUnverifiedUser(user.Id),
                 TimeSpan.FromHours(2)
             );
@@ -119,7 +122,7 @@ namespace AuthApi.Infrastructure.Services.Auth
                 UserId: user.Id,
                 FullName: user.FullName,
                 Email: user.Email ?? string.Empty,
-                CreateAt: user.CreatedAt)
+                CreatedAt: user.CreatedAt)
             );
         }
 
