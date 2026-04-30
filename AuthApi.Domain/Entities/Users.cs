@@ -1,5 +1,4 @@
 ﻿using AuthApi.Domain.Enums;
-using AuthApi.Domain.ObjectValues;
 using AuthApi.Domain.Exceptions;
 
 namespace AuthApi.Domain.Entities
@@ -7,15 +6,13 @@ namespace AuthApi.Domain.Entities
     public class Users : BaseEntity, IAggregateRoot
     {
         public Users() { }
-        private Users(Guid Id, AgeUser age, UserRole role, string name) : base(Id)
+        private Users(Guid Id, UserRole role, string name) : base(Id)
         {
-            Age = age;
             Role = role;
             Name = name;
         }
 
         public UserRole Role { get; private set; }
-        public AgeUser Age { get; private set; } = null!;
         public string Name { get; private set; } = null!;
 
         public static Users Create(int age, UserRole role, string name)
@@ -27,9 +24,7 @@ namespace AuthApi.Domain.Entities
 
             var id = Guid.CreateVersion7();
 
-            int agePara = AgeUser.Create(age);
-
-            var user = new Users(id, agePara, role, name.Trim());
+            var user = new Users(id, role, name.Trim());
 
             return user;
         }
@@ -43,7 +38,5 @@ namespace AuthApi.Domain.Entities
 
             Name = name.Trim();
         }
-
-        public void ChangeAge(int age) => Age = AgeUser.Create(age);
     }
 }

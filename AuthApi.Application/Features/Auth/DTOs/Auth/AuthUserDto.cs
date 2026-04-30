@@ -6,7 +6,9 @@ namespace AuthApi.Application.Features.Auth.DTOs.Auth
     {
         public Guid Id { get; init; }
         public string? Role { get; init; } = null!;
-        public string Email { get; init; } = string.Empty;
-        public string FullName { get; init; } = string.Empty;
+        public string Email { get; init; } = null!;
+        public string FirstName { get; init; } = null!;
+        public string LastName { get; init; } = null!;
+        public string UserName { get; init; } = null!;
     }
 }

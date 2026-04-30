@@ -57,7 +57,7 @@ namespace AuthApi.Infrastructure.Services.Token
             {
                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
                new Claim(ClaimTypes.Email, user.Email ?? ""),
-               new Claim(ClaimTypes.Name, user.FullName),
+               new Claim(ClaimTypes.Name, user.UserName),
             };
 
             claims.AddRange(roles.Select(name => new Claim(ClaimTypes.Role, name)));
@@ -112,7 +112,7 @@ namespace AuthApi.Infrastructure.Services.Token
             {
                 Id = user.Id,
                 Email = user.Email ?? string.Empty,
-                FullName = user.FullName,
+                UserName = user.UserName!,
                 Role = string.Join(", ", roles)
             }, roles);
         }

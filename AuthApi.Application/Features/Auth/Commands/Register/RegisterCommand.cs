@@ -4,12 +4,13 @@ using AuthApi.Application.Features.Auth.DTOs.Auth.Register;
 
 namespace AuthApi.Application.Features.Auth.Commands.Register
 {
-    public sealed record RegisterCommand(
-        int Age,            
+    public sealed record RegisterCommand(    
         string Email,
-        string FullName,
+        string FirstName,
+        string LastName,
         string UserName,
         string PhoneNumber,
+        DateOnly DateOfBirth,
         string Password,
         string ConfirmPassword) : ICommand<Result<RegisterResponse>>;
 }

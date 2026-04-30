@@ -2,7 +2,9 @@
 {
     public sealed record RegisterResponse(
         Guid UserId,
-        string FullName,
+        string FirstName,
+        string LastName,
+        string UserName,
         string Email,
         DateTime CreatedAt);
 }

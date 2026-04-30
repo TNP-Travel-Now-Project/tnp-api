@@ -59,7 +59,7 @@ namespace AuthApi.Infrastructure.Services.Auth
             {
                 Id = user.Id,
                 Email = user.Email ?? string.Empty,
-                FullName = user.FullName,
+                UserName = user.UserName!,
                 Role = roleName
             };
 
@@ -67,8 +67,8 @@ namespace AuthApi.Infrastructure.Services.Auth
 
             return Result<LoginResponse>.Success(
                 new LoginResponse(
-                    accessToken: token.AccessToken,
-                    refreshToken: token.RefreshToken,
+                    accessToken: null,
+                    refreshToken: null,
                     expired: token.AccessTokenExpiresAt,
                     userId: user.Id,
                     email: user.Email!,
@@ -81,8 +81,9 @@ namespace AuthApi.Infrastructure.Services.Auth
             var db = _redis.GetDatabase();
 
             var user = new ApplicationUser(
-                fullName: req.FullName,
-                age: req.Age,
+                firstName: req.FirstName,
+                lastName: req.LastName,
+                dateOfBirth: req.DateOfBirth,
                 email: req.Email,
                 userName: req.UserName);
 
@@ -120,7 +121,9 @@ namespace AuthApi.Infrastructure.Services.Auth
             return Result<RegisterResponse>.Success(
                 new RegisterResponse(
                 UserId: user.Id,
-                FullName: user.FullName,
+                FirstName: user.FirstName,
+                LastName: user.LastName,
+                UserName: user.UserName!,
                 Email: user.Email ?? string.Empty,
                 CreatedAt: user.CreatedAt)
             );

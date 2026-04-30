@@ -4,19 +4,21 @@ namespace AuthApi.Infrastructure.Identities
 {
     public class ApplicationUser : IdentityUser<Guid>
     {
-        public string FullName { get; set; } = null!;
-        public int Age { get; set; }
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public string FirstName { get; set; } = null!;
+        public string LastName { get; set; } = null!;
+        public DateOnly DateOfBirth { get; set; }
         public DateTime? UpdatedAt { get; set; }
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         public ApplicationUser() { }
 
-        public ApplicationUser(string fullName, int age, string email, string userName)
+        public ApplicationUser(string firstName, string lastName, string email, string userName, DateOnly dateOfBirth)
         {
-            FullName = fullName;
-            Age = age;
             Email = email;
             UserName = userName;
+            FirstName = firstName;
+            LastName = lastName;
+            DateOfBirth = dateOfBirth;
         }
     }
 }

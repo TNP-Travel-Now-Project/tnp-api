@@ -1,5 +1,4 @@
 ﻿using AuthApi.Domain.Enums;
-using AuthApi.Infrastructure.Identities;
 using Microsoft.AspNetCore.Identity;
 
 namespace AuthApi.Infrastructure.Identities.Seeds
@@ -30,14 +29,20 @@ namespace AuthApi.Infrastructure.Identities.Seeds
             if (await userManager.FindByEmailAsync(email) == null)
             {
                 var admin = new ApplicationUser(
-                    "Nguyễn Thành Tuấn",
-                    20,
+                    "Tuấn",
+                    "Nguyễn",
                     email,
-                    "admin");
+                    "admin",
+                    new DateOnly(2005, 8, 20));
 
                 admin.EmailConfirmed = true;
 
-                await userManager.CreateAsync(admin, "Admin@123");
+                var result = await userManager.CreateAsync(admin, "Admin@123");
+                if (!result.Succeeded)
+                {
+                    throw new Exception(string.Join(", ", result.Errors.Select(e => e.Description)));
+                }
+
                 await userManager.AddToRoleAsync(admin, UserRole.Admin.ToString());
             }
         }

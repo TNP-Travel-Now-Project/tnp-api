@@ -10,17 +10,16 @@ namespace AuthApi.Application.Features.Auth.Commands.Register
     {
         public async Task<Result<RegisterResponse>> Handle(RegisterCommand request, CancellationToken cancellationToken)
         {
-            var newAge = AgeUser.Create(request.Age);
             var newEmail = Email.Create(request.Email);
 
             var newRes = request with
             {
-                Age = newAge,
                 Email = newEmail.Value,
-                FullName = request.FullName,
+                FirstName = request.FirstName,
+                LastName = request.LastName,
+                UserName = request.UserName,
                 Password = request.Password,
-                PhoneNumber = request.PhoneNumber,
-                UserName = request.UserName
+                PhoneNumber = request.PhoneNumber
             };
 
             return await _identities.RegisterAsync(newRes);
