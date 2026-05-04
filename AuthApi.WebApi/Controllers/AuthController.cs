@@ -1,8 +1,10 @@
 ﻿using AuthApi.Application.Features.Auth.Commands.Login;
+using AuthApi.Application.Features.Auth.Commands.RefreshToken;
 using AuthApi.Application.Features.Auth.Commands.Register;
 using AuthApi.Application.Features.Auth.Commands.ResetPassword;
 using AuthApi.Application.Features.Auth.Commands.SendOTP;
 using AuthApi.Application.Features.Auth.Commands.VerifyEmail;
+using AuthApi.Infrastructure.Identities;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -54,11 +56,10 @@ namespace AuthApi.WebApi.Controllers
             return result.IsSuccess ? Ok(result) : BadRequest(result);
         }
 
-        // chua
         [HttpPost("refresh-token")]
-        public async Task<ActionResult> RefreshToken(ResetPasswordCommand resetPass)
+        public async Task<ActionResult> RefreshToken(RefreshTokenCommand refresh)
         {
-            var result = await mediator.Send(resetPass);
+            var result = await mediator.Send(refresh);
             return result.IsSuccess ? Ok(result) : BadRequest(result);
         }
 
@@ -71,4 +72,3 @@ namespace AuthApi.WebApi.Controllers
         }
     }
 }
-    

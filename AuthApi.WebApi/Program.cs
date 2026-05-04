@@ -3,13 +3,15 @@ using AuthApi.Infrastructure.Common;
 using AuthApi.Infrastructure.Configuration;
 using AuthApi.Infrastructure.Identities;
 using AuthApi.Infrastructure.Identities.Seeds;
-using Hangfire;
-using Microsoft.AspNetCore.Identity;
-using System.Text;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.IdentityModel.Tokens;
 using AuthApi.Infrastructure.Services.Auth;
 using AuthApi.WebApi.Middlewares;
+using Hangfire;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.CookiePolicy;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi;
+using System.Text;
 
 
 namespace AuthApi.WebApi
@@ -58,7 +60,7 @@ namespace AuthApi.WebApi
             });
             #endregion
 
-            #region config JWTq
+            #region config JWT
             var jwtSettings = builder.Configuration.GetSection("AppSettings");
             var key = Encoding.UTF8.GetBytes(jwtSettings["JwtKey"]!);
 
@@ -70,7 +72,7 @@ namespace AuthApi.WebApi
 
             .AddJwtBearer(options =>
             {
-                options.RequireHttpsMetadata = isDev;
+                options.RequireHttpsMetadata = true;
 
                 options.TokenValidationParameters = new TokenValidationParameters
                 {
@@ -86,6 +88,19 @@ namespace AuthApi.WebApi
 
                 options.Events = new JwtBearerEvents
                 {
+                    OnMessageReceived = context =>
+                    {
+                        //var token = context.Request.Cookies["accessToken"]; cach luu acesstoken len cookie
+
+                        var authorization = context.Request.Headers.Authorization.FirstOrDefault();
+                        if (!string.IsNullOrEmpty(authorization) && authorization.StartsWith("Bearer "))
+                        {
+                            context.Token = authorization.Substring("Bearer ".Length).Trim();
+                        }
+
+                        return Task.CompletedTask;
+                    },
+
                     OnAuthenticationFailed = context =>
                     {
                         Console.WriteLine($"Authentication failed: {context.Exception.Message}");
@@ -93,18 +108,6 @@ namespace AuthApi.WebApi
                         if (context.Exception is SecurityTokenExpiredException)
                         {
                             context.Response.Headers.Append("Token-Expired", "true");
-                        }
-
-                        return Task.CompletedTask;
-                    },
-
-                    OnMessageReceived = context =>
-                    {
-                        var token = context.Request.Cookies["accessToken"];
-
-                        if (!string.IsNullOrEmpty(token))
-                        {
-                            context.Token = token;
                         }
 
                         return Task.CompletedTask;
@@ -132,6 +135,7 @@ namespace AuthApi.WebApi
             builder.Services.Configure<CookiePolicyOptions>(options =>
             {
                 options.MinimumSameSitePolicy = SameSiteMode.Unspecified;
+                options.HttpOnly = HttpOnlyPolicy.None;
                 options.OnAppendCookie = ctx =>
                 {
                     ctx.CookieOptions.SameSite = SameSiteMode.None;
@@ -151,7 +155,32 @@ namespace AuthApi.WebApi
 
             #region Add Authorize for swagger
             builder.Services.AddEndpointsApiExplorer();
-            builder.Services.AddSwaggerGen();
+
+            builder.Services.AddSwaggerGen(options =>
+            {
+                options.SwaggerDoc("v1", new OpenApiInfo
+
+                {
+                    Title = "Your API Title",
+                    Version = "v1",
+                    Description = "ASP.NET Core Web API với Google OAuth + JWT"
+                });
+
+                options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+                {
+                    Name = "Authorization",
+                    Type = SecuritySchemeType.Http,
+                    Scheme = "Bearer",
+                    BearerFormat = "JWT",
+                    In = ParameterLocation.Header,
+                    Description = "Nhập JWT token theo định dạng: Bearer {token}\nVí dụ: Bearer eyJhbGciOiJIUzI1NiIs..."
+                });
+
+                options.AddSecurityRequirement(document => new OpenApiSecurityRequirement
+                {
+                    [new OpenApiSecuritySchemeReference("Bearer", document)] = []
+                });
+            });
             #endregion
 
             var app = builder.Build();

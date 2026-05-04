@@ -8,4 +8,8 @@ namespace AuthApi.Domain.Interfaces
         Task<Users?> GetUserByIdAsync(Guid id);
         Task<int> CommitAsync();
     }
+    public interface ICategoryRepository
+    {
+        Task<Category> AddAsync(Category user);
+    }
 }

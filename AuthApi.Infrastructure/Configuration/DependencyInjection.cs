@@ -1,7 +1,6 @@
 ﻿using AuthApi.Application.Abstractions.Interfaces.Auth;
 using AuthApi.Application.Abstractions.Interfaces.Email;
 using AuthApi.Application.Abstractions.Interfaces.Repositories;
-using AuthApi.Application.Abstractions.Repositories.Auth;
 using AuthApi.Application.Abstractions.Repositories.Email;
 using AuthApi.Application.Features.Auth.Commands.Register;
 using AuthApi.Domain.Interfaces;

@@ -1,19 +1,23 @@
-﻿using AuthApi.Application.Abstractions.Interfaces.Email;
-using AuthApi.Application.Abstractions.Repositories.Auth;
+﻿using AuthApi.Application.Abstractions.Interfaces.Auth;
+using AuthApi.Application.Abstractions.Interfaces.Email;
 using AuthApi.Application.Abstractions.Repositories.Email;
 using AuthApi.Application.Common;
 using AuthApi.Application.Features.Auth.Commands.Login;
+using AuthApi.Application.Features.Auth.Commands.RefreshToken;
 using AuthApi.Application.Features.Auth.Commands.Register;
 using AuthApi.Application.Features.Auth.Commands.ResetPassword;
 using AuthApi.Application.Features.Auth.DTOs.Auth;
 using AuthApi.Application.Features.Auth.DTOs.Auth.ForgetPassword;
 using AuthApi.Application.Features.Auth.DTOs.Auth.Login;
+using AuthApi.Application.Features.Auth.DTOs.Auth.RefreshToken;
 using AuthApi.Application.Features.Auth.DTOs.Auth.Register;
 using AuthApi.Infrastructure.Common;
 using AuthApi.Infrastructure.Identities;
 using AuthApi.Infrastructure.Services.Email;
 using Hangfire;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.Extensions.Options;
 using StackExchange.Redis;
 using System.Data;
@@ -67,13 +71,26 @@ namespace AuthApi.Infrastructure.Services.Auth
 
             return Result<LoginResponse>.Success(
                 new LoginResponse(
-                    accessToken: null,
+                    accessToken: token.AccessToken,
                     refreshToken: null,
                     expired: token.AccessTokenExpiresAt,
                     userId: user.Id,
                     email: user.Email!,
                     role: roleName)
             );
+        }
+
+        public async Task<Result<RefreshTokenResponse>> RefeshTokenAsync(RefreshTokenCommand refresh)
+        {
+            var token = await _tokenService.RefreshTokenAsync();
+
+            return token.AccessToken != null
+                ? Result<RefreshTokenResponse>.Success(new RefreshTokenResponse(
+                        accessToken: token.AccessToken,
+                        refreshtoken: null,
+                        expiredAt: token.AccessTokenExpiresAt))
+
+                : Result<RefreshTokenResponse>.Fail("Occured error while RefreshToken handle");
         }
 
         public async Task<Result<RegisterResponse>> RegisterAsync(RegisterCommand req)

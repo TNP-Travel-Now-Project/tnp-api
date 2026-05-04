@@ -1,10 +1,8 @@
-﻿using AuthApi.Domain.ObjectValues;
-using AuthApi.Infrastructure.Identities;
+﻿using AuthApi.Infrastructure.Identities;
 using AuthApi.Infrastructure.Persistence.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace AuthApi.Infrastructure.Persistence
 {

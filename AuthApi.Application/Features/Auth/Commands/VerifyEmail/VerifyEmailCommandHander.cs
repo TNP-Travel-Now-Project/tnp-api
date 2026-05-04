@@ -1,5 +1,5 @@
-﻿using AuthApi.Application.Abstractions.Messaging.Command;
-using AuthApi.Application.Abstractions.Repositories.Auth;
+﻿using AuthApi.Application.Abstractions.Interfaces.Auth;
+using AuthApi.Application.Abstractions.Messaging.Command;
 using AuthApi.Application.Common;
 
 namespace AuthApi.Application.Features.Auth.Commands.VerifyEmail

@@ -1,4 +1,4 @@
-﻿using AuthApi.Application.Abstractions.Repositories.Auth;
+﻿using AuthApi.Application.Abstractions.Interfaces.Auth;
 using AuthApi.Application.Common;
 using AuthApi.Application.Features.Auth.DTOs.Auth.ForgetPassword;
 using AuthApi.Domain.ObjectValues;

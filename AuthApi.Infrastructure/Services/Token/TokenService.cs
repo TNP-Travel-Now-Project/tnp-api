@@ -1,5 +1,4 @@
 ﻿using AuthApi.Application.Abstractions.Interfaces.Auth;
-using AuthApi.Application.Abstractions.Repositories.Auth;
 using AuthApi.Application.Features.Auth.DTOs.Auth;
 using AuthApi.Application.Features.Auth.DTOs.Auth.Token;
 using AuthApi.Infrastructure.Common;
@@ -41,12 +40,11 @@ namespace AuthApi.Infrastructure.Services.Token
             _dbContext.RefreshToken.Add(refreshTokenEntity);
             await _dbContext.SaveChangesAsync();
 
-            _tokenHandler.SetAccessToken(token: accessToken, minutes: expiredMinute);
             _tokenHandler.SetRefreshToken(token: refreshToken, days: expiredDay);
             _tokenHandler.SetCSRFToken(days: expiredDay);
 
             return new AuthResponse(
-                AccessToken: null,
+                AccessToken: accessToken,
                 RefreshToken: null,
                 AccessTokenExpiresAt: DateTime.UtcNow.AddMinutes(expiredMinute));
         }
