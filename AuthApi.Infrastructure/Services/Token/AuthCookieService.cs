@@ -39,8 +39,9 @@ namespace AuthApi.Infrastructure.Services.Token
 
             if (context == null) return;
 
-            context?.Response.Cookies.Delete("accessToken");
+            //context?.Response.Cookies.Delete("accessToken");
             context?.Response.Cookies.Delete("refreshToken");
+            context?.Response.Cookies.Delete("CSRF-TOKEN");
         }
 
         public string? GetAccessToken()

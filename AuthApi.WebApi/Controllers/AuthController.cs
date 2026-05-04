@@ -1,10 +1,10 @@
 ﻿using AuthApi.Application.Features.Auth.Commands.Login;
+using AuthApi.Application.Features.Auth.Commands.Logout;
 using AuthApi.Application.Features.Auth.Commands.RefreshToken;
 using AuthApi.Application.Features.Auth.Commands.Register;
 using AuthApi.Application.Features.Auth.Commands.ResetPassword;
 using AuthApi.Application.Features.Auth.Commands.SendOTP;
 using AuthApi.Application.Features.Auth.Commands.VerifyEmail;
-using AuthApi.Infrastructure.Identities;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -50,24 +50,23 @@ namespace AuthApi.WebApi.Controllers
         }
 
         [HttpPost("reset-password")]
-        public async Task<ActionResult> ResetPassword(ResetPasswordCommand resetPass)
+        public async Task<ActionResult> ResetPassword(ResetPasswordCommand command)
         {
-            var result = await mediator.Send(resetPass);
+            var result = await mediator.Send(command);
             return result.IsSuccess ? Ok(result) : BadRequest(result);
         }
 
         [HttpPost("refresh-token")]
-        public async Task<ActionResult> RefreshToken(RefreshTokenCommand refresh)
+        public async Task<ActionResult> RefreshToken(RefreshTokenCommand command)
         {
-            var result = await mediator.Send(refresh);
+            var result = await mediator.Send(command);
             return result.IsSuccess ? Ok(result) : BadRequest(result);
         }
 
-        // chua
         [HttpPost("logout")]
-        public async Task<ActionResult> Logout(ResetPasswordCommand resetPass)
+        public async Task<ActionResult> Logout(LogoutCommand command)
         {
-            var result = await mediator.Send(resetPass);
+            var result = await mediator.Send(command);
             return result.IsSuccess ? Ok(result) : BadRequest(result);
         }
     }

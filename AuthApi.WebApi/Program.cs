@@ -115,7 +115,7 @@ namespace AuthApi.WebApi
 
                     OnChallenge = context =>
                     {
-                        context.HandleResponse(); // Ngăn chặn response mặc định
+                        context.HandleResponse();
                         context.Response.StatusCode = StatusCodes.Status401Unauthorized;
                         context.Response.ContentType = "application/json";
 
@@ -161,9 +161,9 @@ namespace AuthApi.WebApi
                 options.SwaggerDoc("v1", new OpenApiInfo
 
                 {
-                    Title = "Your API Title",
+                    Title = "Travel Now API",
                     Version = "v1",
-                    Description = "ASP.NET Core Web API với Google OAuth + JWT"
+                    Description = "ASP.NET Core Web API với Google OAuth + JWT Bearer"
                 });
 
                 options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme

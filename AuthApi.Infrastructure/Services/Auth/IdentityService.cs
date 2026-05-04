@@ -3,6 +3,7 @@ using AuthApi.Application.Abstractions.Interfaces.Email;
 using AuthApi.Application.Abstractions.Repositories.Email;
 using AuthApi.Application.Common;
 using AuthApi.Application.Features.Auth.Commands.Login;
+using AuthApi.Application.Features.Auth.Commands.Logout;
 using AuthApi.Application.Features.Auth.Commands.RefreshToken;
 using AuthApi.Application.Features.Auth.Commands.Register;
 using AuthApi.Application.Features.Auth.Commands.ResetPassword;
@@ -19,6 +20,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
 using StackExchange.Redis;
 using System.Data;
 using System.Security.Cryptography;
@@ -32,7 +34,8 @@ namespace AuthApi.Infrastructure.Services.Auth
         IEmailService _emailService,
         IBackgroundJobClient _jobClient,
         IOptions<AppSettings> _appSetting,
-        IConnectionMultiplexer _redis) : IIdentityService
+        IConnectionMultiplexer _redis,
+        IAuthCookieService _tokenHandler) : IIdentityService
     {
         public string OTPKey { get => "otp:"; }
 
@@ -78,6 +81,14 @@ namespace AuthApi.Infrastructure.Services.Auth
                     email: user.Email!,
                     role: roleName)
             );
+        }
+
+        public async Task<Result<bool>> LogoutAsync(LogoutCommand request)
+        {
+            await _tokenService.RevokeRefreshTokenAsync();
+            _tokenHandler.ClearTokens();
+
+            return Result<bool>.Success(true);
         }
 
         public async Task<Result<RefreshTokenResponse>> RefeshTokenAsync(RefreshTokenCommand refresh)
