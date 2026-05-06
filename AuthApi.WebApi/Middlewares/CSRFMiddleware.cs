@@ -33,7 +33,8 @@ namespace AuthApi.WebApi.Middlewares
             if (!string.IsNullOrEmpty(path)
                 && path.StartsWith($"{apiAuth}/login")
                 || path.StartsWith($"{apiAuth}/register")
-                || path.StartsWith($"{apiAuth}/refresh-token"))
+                || path.StartsWith($"{apiAuth}/refresh-token")
+                || path.StartsWith($"{apiAuth}/logout"))
             {
                 await _next(_context);
                 return;

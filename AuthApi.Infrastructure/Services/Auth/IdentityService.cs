@@ -10,6 +10,7 @@ using AuthApi.Application.Features.Auth.Commands.ResetPassword;
 using AuthApi.Application.Features.Auth.DTOs.Auth;
 using AuthApi.Application.Features.Auth.DTOs.Auth.ForgetPassword;
 using AuthApi.Application.Features.Auth.DTOs.Auth.Login;
+using AuthApi.Application.Features.Auth.DTOs.Auth.Logout;
 using AuthApi.Application.Features.Auth.DTOs.Auth.RefreshToken;
 using AuthApi.Application.Features.Auth.DTOs.Auth.Register;
 using AuthApi.Infrastructure.Common;
@@ -83,12 +84,13 @@ namespace AuthApi.Infrastructure.Services.Auth
             );
         }
 
-        public async Task<Result<bool>> LogoutAsync(LogoutCommand request)
+        public async Task<Result<LogoutResponse>> LogoutAsync(LogoutCommand request)
         {
             await _tokenService.RevokeRefreshTokenAsync();
-            _tokenHandler.ClearTokens();
+            _tokenHandler.ClearTokens(); 
 
-            return Result<bool>.Success(true);
+            return Result<LogoutResponse>.Success(
+                new LogoutResponse(Message: "Logout successful"));
         }
 
         public async Task<Result<RefreshTokenResponse>> RefeshTokenAsync(RefreshTokenCommand refresh)

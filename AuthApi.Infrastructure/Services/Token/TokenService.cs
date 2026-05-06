@@ -4,7 +4,6 @@ using AuthApi.Application.Features.Auth.DTOs.Auth.Token;
 using AuthApi.Infrastructure.Common;
 using AuthApi.Infrastructure.Identities;
 using AuthApi.Infrastructure.Persistence;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -19,7 +18,6 @@ namespace AuthApi.Infrastructure.Services.Token
     public class TokenService(
         AppDbContext _dbContext,
         UserManager<ApplicationUser> _userManager,
-        IHttpContextAccessor _httpContextAccessor,
         IOptions<AppSettings> _appSetting,
         IAuthCookieService _tokenHandler) : ITokenService
     {
@@ -117,7 +115,7 @@ namespace AuthApi.Infrastructure.Services.Token
 
         public async Task RevokeRefreshTokenAsync()
         {
-            string refreshTokenToCookie = _httpContextAccessor.HttpContext?.Request.Cookies["refreshToken"] ?? null!;
+            string refreshTokenToCookie = _tokenHandler.GetRefreshToken()!;
             if (refreshTokenToCookie == null) return;
 
             var entity = await _dbContext.RefreshToken.FirstOrDefaultAsync(rt => rt.Token == refreshTokenToCookie);

@@ -6,6 +6,7 @@ using AuthApi.Application.Features.Auth.Commands.Register;
 using AuthApi.Application.Features.Auth.Commands.ResetPassword;
 using AuthApi.Application.Features.Auth.DTOs.Auth.ForgetPassword;
 using AuthApi.Application.Features.Auth.DTOs.Auth.Login;
+using AuthApi.Application.Features.Auth.DTOs.Auth.Logout;
 using AuthApi.Application.Features.Auth.DTOs.Auth.RefreshToken;
 using AuthApi.Application.Features.Auth.DTOs.Auth.Register;
 
@@ -14,7 +15,7 @@ namespace AuthApi.Application.Abstractions.Interfaces.Auth
     public interface IIdentityService
     {
         Task<Result<LoginResponse>> LoginAsync(LoginCommand request);
-        Task<Result<bool>> LogoutAsync(LogoutCommand request);
+        Task<Result<LogoutResponse>> LogoutAsync(LogoutCommand request);
         Task<Result<RegisterResponse>> RegisterAsync(RegisterCommand request);
         Task<Result<bool>> VerifyEmailAsync(Guid userId, string token);
         Task<Result<OtpResponse>> SendOTPAsync(string email);

@@ -64,9 +64,9 @@ namespace AuthApi.WebApi.Controllers
         }
 
         [HttpPost("logout")]
-        public async Task<ActionResult> Logout(LogoutCommand command)
+        public async Task<ActionResult> Logout()
         {
-            var result = await mediator.Send(command);
+            var result = await mediator.Send(new LogoutCommand());
             return result.IsSuccess ? Ok(result) : BadRequest(result);
         }
     }
