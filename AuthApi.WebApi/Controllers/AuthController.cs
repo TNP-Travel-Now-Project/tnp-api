@@ -5,6 +5,7 @@ using AuthApi.Application.Features.Auth.Commands.Register;
 using AuthApi.Application.Features.Auth.Commands.ResetPassword;
 using AuthApi.Application.Features.Auth.Commands.SendOTP;
 using AuthApi.Application.Features.Auth.Commands.VerifyEmail;
+using AuthApi.Application.Features.Auth.DTOs.Auth.Login;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -16,10 +17,16 @@ namespace AuthApi.WebApi.Controllers
     public class AuthController(IMediator mediator) : ControllerBase
     {
         [HttpPost("login")]
-        public async Task<ActionResult> Login(LoginCommand command)
+        [ProducesResponseType(typeof(LoginResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status500InternalServerError)]
+        public async Task<ActionResult<LoginResponse>> Login(LoginCommand command)
         {
             var result = await mediator.Send(command);
-            return result.IsSuccess ? Ok(result) : BadRequest(result);
+
+            return result.IsSuccess
+                ? Ok(result.Value)
+                : BadRequest(new ApiErrorResponse(result.Error!));
         }
 
         [HttpPost("register")]
@@ -57,9 +64,9 @@ namespace AuthApi.WebApi.Controllers
         }
 
         [HttpPost("refresh-token")]
-        public async Task<ActionResult> RefreshToken(RefreshTokenCommand command)
+        public async Task<ActionResult> RefreshToken()
         {
-            var result = await mediator.Send(command);
+            var result = await mediator.Send(new RefreshTokenCommand());
             return result.IsSuccess ? Ok(result) : BadRequest(result);
         }
 

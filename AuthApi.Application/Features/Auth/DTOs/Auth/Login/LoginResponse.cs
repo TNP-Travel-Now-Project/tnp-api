@@ -1,6 +1,4 @@
-﻿using AuthApi.Domain.Interfaces;
-
-namespace AuthApi.Application.Features.Auth.DTOs.Auth.Login
+﻿namespace AuthApi.Application.Features.Auth.DTOs.Auth.Login
 {
     public record LoginResponse(
         string? accessToken,

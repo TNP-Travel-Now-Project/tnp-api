@@ -6,13 +6,13 @@ using AuthApi.Infrastructure.Identities.Seeds;
 using AuthApi.Infrastructure.Services.Auth;
 using AuthApi.WebApi.Middlewares;
 using Hangfire;
+using Humanizer;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.CookiePolicy;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using System.Text;
-
 
 namespace AuthApi.WebApi
 {
@@ -26,7 +26,7 @@ namespace AuthApi.WebApi
 
             builder.Services.AddHttpContextAccessor();
 
-            // Nao day len prod thi them "!" cho isDev
+            // Nao day len prod thi them "!" cho bien isDev
             var isDev = builder.Environment.IsDevelopment();
             var feUrl = builder.Configuration["Frontend:Url"];
 
@@ -119,11 +119,12 @@ namespace AuthApi.WebApi
                         context.Response.StatusCode = StatusCodes.Status401Unauthorized;
                         context.Response.ContentType = "application/json";
 
-                        var result = System.Text.Json.JsonSerializer.Serialize(new
-                        {
-                            error = "unauthorized",
-                            message = "You must provide a valid access token."
-                        });
+                        var result = System.Text.Json.JsonSerializer.Serialize(
+                            new ApiErrorResponse
+                            {
+                                Code = "UNAUTHORIZED",
+                                Message = "You must provide a valid access token."
+                            });
 
                         return context.Response.WriteAsync(result);
                     }
@@ -200,8 +201,9 @@ namespace AuthApi.WebApi
             {
                 app.UseSwagger();
                 app.UseSwaggerUI();
-                app.UseExceptionHandler("/error");
             }
+
+            app.UseMiddleware<ExceptionMiddleware>();
 
             app.UseHangfireDashboard("/hangfire", new DashboardOptions
             {
@@ -211,7 +213,9 @@ namespace AuthApi.WebApi
 
             app.UseCors("AllowNextJS");
 
-            app.UseHttpsRedirection();
+            app.UseHttpsRedirection();   
+
+            app.UseMiddleware<SecureHeadersMiddleware>();
 
             app.UseCookiePolicy();
 
@@ -219,7 +223,7 @@ namespace AuthApi.WebApi
 
             app.UseMiddleware<CSRFMiddleware>();
 
-            app.UseAuthorization(); 
+            app.UseAuthorization();
 
             app.MapControllers();
 

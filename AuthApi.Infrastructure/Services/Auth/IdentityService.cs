@@ -44,18 +44,18 @@ namespace AuthApi.Infrastructure.Services.Auth
         {
             var user = await _userManager.FindByEmailAsync(req.Email);
             if (user == null)
-                return Result<LoginResponse>.Fail("Invalid credentials");
+                return Result<LoginResponse>.Fail(new Error(ErrorCodes.InvalidCredentials, "Invalid credentials"));
 
             if (await _userManager.IsLockedOutAsync(user))
-                return Result<LoginResponse>.Fail("User is locked");
+                return Result<LoginResponse>.Fail(new Error(ErrorCodes.UserLockedOut, "User is locked"));
 
             if (!user.EmailConfirmed)
-                return Result<LoginResponse>.Fail("Email is not confirm");
+                return Result<LoginResponse>.Fail(new Error(ErrorCodes.EmailNotConfirmed, "Email is not confirmed"));
 
             if (!await _userManager.CheckPasswordAsync(user, req.Password))
             {
                 await _userManager.AccessFailedAsync(user);
-                return Result<LoginResponse>.Fail("Invalid credentials");
+                return Result<LoginResponse>.Fail(new Error(ErrorCodes.InvalidCredentials, "Invalid credentials"));
             }
 
             await _userManager.ResetAccessFailedCountAsync(user);
