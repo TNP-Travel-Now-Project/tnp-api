@@ -1,5 +1,6 @@
-using System.Text.Json.Serialization;
 using AuthApi.Application.Common;
+using System.Text.Json.Serialization;
+
 
 namespace AuthApi.WebApi
 {

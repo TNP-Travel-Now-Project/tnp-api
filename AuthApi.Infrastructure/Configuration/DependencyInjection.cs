@@ -13,7 +13,6 @@ using AuthApi.Infrastructure.Services.Email;
 using AuthApi.Infrastructure.Services.Token;
 using FluentValidation;
 using Hangfire;
-using Hangfire.PostgreSql;
 using Hangfire.Redis.StackExchange;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.SqlClient;
@@ -51,7 +50,7 @@ namespace AuthApi.Infrastructure.Configuration
 
             #region EFCore DI
             services.AddDbContext<AppDbContext>(options =>
-                 options.UseNpgsql(config.GetConnectionString("Default"))
+                 options.UseSqlServer(config.GetConnectionString("Default"))
              );
 
             services.Configure<IdentityOptions>(options =>
@@ -130,17 +129,14 @@ namespace AuthApi.Infrastructure.Configuration
             services.AddSignalR()
                 .AddStackExchangeRedis(redisConnectionString);
 
-            // HANGFIRE REDIS STORAGE
+            // HANGFIRE SQL SERVER STORAGE
             services.AddHangfire(config =>
             {
                 config.SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
                          .UseSimpleAssemblyNameTypeSerializer()
                          .UseRecommendedSerializerSettings()
-                         .UsePostgreSqlStorage(options =>
-                         {
-                             options.UseNpgsqlConnection(connectionString);
-
-                         }).UseRedisStorage(redisConnectionString);
+                         .UseSqlServerStorage(connectionString)
+                         .UseRedisStorage(redisConnectionString);
             });
 
             services.AddHangfireServer();
