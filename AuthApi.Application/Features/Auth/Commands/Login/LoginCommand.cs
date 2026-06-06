@@ -1,7 +1,7 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using AuthApi.Application.Abstractions.Messaging.Command;
 using AuthApi.Application.Common;
-using AuthApi.Application.Features.Auth.DTOs.Auth.Login;
+using AuthApi.Application.Features.Auth.DTOs.Login;
 
 namespace AuthApi.Application.Features.Auth.Commands.Login
 {

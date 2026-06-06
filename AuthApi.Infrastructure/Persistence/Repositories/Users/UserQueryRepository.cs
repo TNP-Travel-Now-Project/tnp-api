@@ -22,5 +22,31 @@ namespace AuthApi.Infrastructure.Persistence.Repositories.Users
 
             return user.ToList();
         }
+
+        public async Task<MeResponse?> GetUserByIdAsync(Guid userId, CancellationToken cancellationToken = default)
+        {
+            var query = _queryFactory.Query("AspNetUsers as u")
+                .LeftJoin("AspNetUserRoles as ur", "u.Id", "ur.UserId")
+                .LeftJoin("AspNetRoles as r", "ur.RoleId", "r.Id")
+                .Where("u.Id", userId)
+                .Select(
+                    "u.Id",
+                    "u.Email",
+                    "u.UserName",
+                    "u.FirstName",
+                    "u.LastName",
+                    "u.DOB as DateOfBirth",
+                    "u.PhoneNumber",
+                    "u.EmailConfirmed",
+                    "u.CreatedAt",
+                    "u.UpdatedAt",
+                    "r.Name as Role"
+                )
+                .GroupBy("u.Id", "u.Email", "u.UserName", "u.FirstName", "u.LastName",
+                         "u.DOB", "u.PhoneNumber", "u.EmailConfirmed", "u.CreatedAt", "u.UpdatedAt", "r.Name");
+
+            var result = await query.GetAsync<MeResponse>(cancellationToken: cancellationToken);
+            return result.FirstOrDefault();
+        }
     }
 }

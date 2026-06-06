@@ -1,6 +1,6 @@
 ﻿using AuthApi.Application.Abstractions.Interfaces.Auth;
-using AuthApi.Application.Features.Auth.DTOs.Auth;
-using AuthApi.Application.Features.Auth.DTOs.Auth.Token;
+using AuthApi.Application.Features.Auth.DTOs;
+using AuthApi.Application.Features.Auth.DTOs.Token;
 using AuthApi.Infrastructure.Common;
 using AuthApi.Infrastructure.Identities;
 using AuthApi.Infrastructure.Persistence;

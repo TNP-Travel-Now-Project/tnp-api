@@ -1,7 +1,7 @@
 ﻿using AuthApi.Application.Abstractions.Interfaces.Auth;
 using AuthApi.Application.Abstractions.Messaging.Command;
 using AuthApi.Application.Common;
-using AuthApi.Application.Features.Auth.DTOs.Auth.Register;
+using AuthApi.Application.Features.Auth.DTOs.Register;
 using AuthApi.Domain.ObjectValues;
 
 namespace AuthApi.Application.Features.Auth.Commands.Register

@@ -1,5 +1,5 @@
-﻿using AuthApi.Application.Features.Auth.DTOs.Auth;
-using AuthApi.Application.Features.Auth.DTOs.Auth.Token;
+﻿using AuthApi.Application.Features.Auth.DTOs;
+using AuthApi.Application.Features.Auth.DTOs.Token;
 
 namespace AuthApi.Application.Abstractions.Interfaces.Auth
 {

@@ -6,5 +6,6 @@ namespace AuthApi.Application.Abstractions.Interfaces.Repositories
     public interface IUserQueryRepository
     {
         Task<List<UserDto>> GetAllUserAsync(CancellationToken cancellationToken = default);
+        Task<MeResponse?> GetUserByIdAsync(Guid userId, CancellationToken cancellationToken = default);
     }
 }

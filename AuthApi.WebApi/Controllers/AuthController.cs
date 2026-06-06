@@ -5,11 +5,11 @@ using AuthApi.Application.Features.Auth.Commands.Register;
 using AuthApi.Application.Features.Auth.Commands.ResetPassword;
 using AuthApi.Application.Features.Auth.Commands.SendOTP;
 using AuthApi.Application.Features.Auth.Commands.VerifyEmail;
-using AuthApi.Application.Features.Auth.DTOs.Auth.Login;
-using AuthApi.Application.Features.Auth.DTOs.Auth.Logout;
-using AuthApi.Application.Features.Auth.DTOs.Auth.RefreshToken;
-using AuthApi.Application.Features.Auth.DTOs.Auth.Register;
-using AuthApi.Application.Features.Auth.DTOs.Auth.ForgetPassword;
+using AuthApi.Application.Features.Auth.DTOs.Login;
+using AuthApi.Application.Features.Auth.DTOs.Logout;
+using AuthApi.Application.Features.Auth.DTOs.RefreshToken;
+using AuthApi.Application.Features.Auth.DTOs.Register;
+using AuthApi.Application.Features.Auth.DTOs.ForgetPassword;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -20,6 +20,14 @@ namespace AuthApi.WebApi.Controllers
     [Route("api/auth"), ApiController]
     public class AuthController(IMediator mediator) : ControllerBase
     {
+        [HttpGet("me")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status401Unauthorized)]
+        public IActionResult Me()
+        {
+            return Ok(new { Authenticated = User.Identity?.IsAuthenticated ?? false });
+        }
+
         [HttpPost("login")]
         [ProducesResponseType(typeof(LoginResponse), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]

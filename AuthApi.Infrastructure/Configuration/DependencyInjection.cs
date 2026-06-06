@@ -88,6 +88,7 @@ namespace AuthApi.Infrastructure.Configuration
             services.AddScoped<ITokenService, TokenService>();
             services.AddScoped<IIdentityService, IdentityService>();
             services.AddScoped<IAuthCookieService, AuthCookieService>();
+            services.AddScoped<ICurrentUserService, CurrentUserService>();
 
             services.AddScoped<IEmailService, EmailService>();
             services.AddScoped<IEmailChecker, EmailChecker>();

@@ -1,4 +1,4 @@
-﻿namespace AuthApi.Application.Features.Auth.DTOs.Auth.Logout
+﻿namespace AuthApi.Application.Features.Auth.DTOs.Logout
 {
     public sealed record LogoutResponse(
         string Message,

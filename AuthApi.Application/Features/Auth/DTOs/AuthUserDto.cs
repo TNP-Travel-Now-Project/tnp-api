@@ -1,6 +1,6 @@
 ﻿using AuthApi.Domain.Enums;
 
-namespace AuthApi.Application.Features.Auth.DTOs.Auth
+namespace AuthApi.Application.Features.Auth.DTOs
 {
     public sealed record AuthUserDto
     {

@@ -1,6 +1,6 @@
 ﻿using AuthApi.Application.Abstractions.Messaging.Command;
 using AuthApi.Application.Common;
-using AuthApi.Application.Features.Auth.DTOs.Auth.Logout;
+using AuthApi.Application.Features.Auth.DTOs.Logout;
 
 namespace AuthApi.Application.Features.Auth.Commands.Logout
 {

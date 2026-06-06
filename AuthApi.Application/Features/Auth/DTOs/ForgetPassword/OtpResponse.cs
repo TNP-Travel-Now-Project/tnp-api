@@ -1,4 +1,4 @@
-﻿namespace AuthApi.Application.Features.Auth.DTOs.Auth.ForgetPassword
+﻿namespace AuthApi.Application.Features.Auth.DTOs.ForgetPassword
 {
     public sealed record OtpResponse
     {
