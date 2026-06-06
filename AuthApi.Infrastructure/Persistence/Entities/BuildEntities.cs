@@ -27,10 +27,24 @@ public static class BuildEntities
                .HasColumnName("DOB")
                .HasColumnType("date")
                .IsRequired();
-            
+
 
             user.Property(u => u.CreatedAt).IsRequired();
             user.Property(u => u.UpdatedAt);
+        });
+
+        builder.Entity<RefreshToken>(rt =>
+        {
+            rt.ToTable("RefreshToken");
+            rt.Property(x => x.Token).IsRequired();
+            rt.Property(x => x.ExpiresAt).IsRequired();
+            rt.Property(x => x.CreatedAt).IsRequired();
+            rt.Property(x => x.IsRevoked).IsRequired();
+
+            rt.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 
