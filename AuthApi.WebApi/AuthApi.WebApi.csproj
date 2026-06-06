@@ -30,6 +30,7 @@
 
 	<ItemGroup>
 	  <ProjectReference Include="..\AuthApi.Application\AuthApi.Application.csproj" />
+	  <ProjectReference Include="..\AuthApi.Domain\AuthApi.Domain.csproj" />
 	  <ProjectReference Include="..\AuthApi.Infrastructure\AuthApi.Infrastructure.csproj" />
 	</ItemGroup>
 

@@ -11,7 +11,7 @@ namespace AuthApi.Infrastructure.Services.Email
         {
             var smtp = _config["Email:Smtp"];
             var port = Convert.ToInt32(_config["Email:Port"]);
-            var from = _config["Email:From"];
+            var from = _config["Email:From"] ?? string.Empty;
             var password = _config["Email:Password"];
 
             var client = new SmtpClient(smtp, port)

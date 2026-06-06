@@ -6,6 +6,10 @@ using AuthApi.Application.Features.Auth.Commands.ResetPassword;
 using AuthApi.Application.Features.Auth.Commands.SendOTP;
 using AuthApi.Application.Features.Auth.Commands.VerifyEmail;
 using AuthApi.Application.Features.Auth.DTOs.Auth.Login;
+using AuthApi.Application.Features.Auth.DTOs.Auth.Logout;
+using AuthApi.Application.Features.Auth.DTOs.Auth.RefreshToken;
+using AuthApi.Application.Features.Auth.DTOs.Auth.Register;
+using AuthApi.Application.Features.Auth.DTOs.Auth.ForgetPassword;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -30,51 +34,71 @@ namespace AuthApi.WebApi.Controllers
         }
 
         [HttpPost("register")]
-        public async Task<ActionResult> Register(RegisterCommand command)
+        [ProducesResponseType(typeof(RegisterResponse), StatusCodes.Status201Created)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status500InternalServerError)]
+        public async Task<ActionResult<RegisterResponse>> Register(RegisterCommand command)
         {
             var result = await mediator.Send(command);
 
-            if (result.Value == null)
-                return BadRequest(result);
-
-            var userId = result.Value.UserId;
-
-            return Created($"/api/auth/{userId}", new { userId });
+            return result.IsSuccess
+                ? Created($"/api/auth/{result.Value!.UserId}", result.Value)
+                : BadRequest(new ApiErrorResponse(result.Error!));
         }
 
         [HttpPost("verify-email")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
         public async Task<ActionResult> VerifyEmail([FromQuery] Guid userId, [FromQuery] string token)
         {
             var result = await mediator.Send(new VerifyEmailCommand(userId, token));
-            return result.IsSuccess ? Ok(result) : BadRequest(result);
+            return result.IsSuccess
+                ? Ok()
+                : BadRequest(new ApiErrorResponse(result.Error!));
         }
 
         [HttpPost("send-otp")]
-        public async Task<ActionResult> SendOTPByEmail(string email)
+        [ProducesResponseType(typeof(OtpResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
+        public async Task<ActionResult<OtpResponse>> SendOTPByEmail([FromQuery] string email)
         {
             var result = await mediator.Send(new SendOTPCommand(email));
-            return result.IsSuccess ? Ok(result) : BadRequest(result);
+            return result.IsSuccess
+                ? Ok(result.Value)
+                : BadRequest(new ApiErrorResponse(result.Error!));
         }
 
         [HttpPost("reset-password")]
-        public async Task<ActionResult> ResetPassword(ResetPasswordCommand command)
+        [ProducesResponseType(typeof(NewPassResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
+        public async Task<ActionResult<NewPassResponse>> ResetPassword(ResetPasswordCommand command)
         {
             var result = await mediator.Send(command);
-            return result.IsSuccess ? Ok(result) : BadRequest(result);
+            return result.IsSuccess
+                ? Ok(result.Value)
+                : BadRequest(new ApiErrorResponse(result.Error!));
         }
 
         [HttpPost("refresh-token")]
-        public async Task<ActionResult> RefreshToken()
+        [ProducesResponseType(typeof(RefreshTokenResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
+        public async Task<ActionResult<RefreshTokenResponse>> RefreshToken()
         {
             var result = await mediator.Send(new RefreshTokenCommand());
-            return result.IsSuccess ? Ok(result) : BadRequest(result);
+            return result.IsSuccess
+                ? Ok(result.Value)
+                : BadRequest(new ApiErrorResponse(result.Error!));
         }
 
         [HttpPost("logout")]
-        public async Task<ActionResult> Logout()
+        [ProducesResponseType(typeof(LogoutResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
+        public async Task<ActionResult<LogoutResponse>> Logout()
         {
             var result = await mediator.Send(new LogoutCommand());
-            return result.IsSuccess ? Ok(result) : BadRequest(result);
+            return result.IsSuccess
+                ? Ok(result.Value)
+                : BadRequest(new ApiErrorResponse(result.Error!));
         }
     }
 }

@@ -16,7 +16,7 @@ namespace AuthApi.WebApi.Middlewares
 
         public async Task InvokeAsync(HttpContext context)
         {
-            var isdev = _env.IsDevelopment();
+            bool isdev = _env.IsDevelopment();
 
             var nonceBytes = new byte[32];
             RandomNumberGenerator.Fill(nonceBytes);
@@ -36,8 +36,7 @@ namespace AuthApi.WebApi.Middlewares
             context.Response.Headers.Append("X-Frame-Options", "DENY");
             context.Response.Headers.Append("Referrer-Policy", "strict-origin-when-cross-origin");
 
-            //if (!isdev) 
-            if (isdev)
+            if (!isdev)
             {
                 context.Response.Headers.Append("Strict-Transport-Security",
                     "max-age=31536000; includeSubDomains; preload");
