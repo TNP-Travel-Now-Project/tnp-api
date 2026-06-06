@@ -2,7 +2,7 @@
 
 ## Tổng Quan
 
-Dự án sử dụng **PostgreSQL** (qua Npgsql) làm database chính và **Redis** cho caching/token lưu trữ tạm. ORM chính là **Entity Framework Core 10** (cho thao tác ghi) kết hợp **Dapper + SqlKata** (cho thao tác đọc).
+Dự án sử dụng **SQL Server** (qua `Microsoft.EntityFrameworkCore.SqlServer` / `Microsoft.Data.SqlClient`) làm database chính và **Redis** cho caching/token lưu trữ tạm. ORM chính là **Entity Framework Core 10** (cho thao tác ghi) kết hợp **Dapper + SqlKata** (cho thao tác đọc).
 
 **Database gồm 3 trạng thái entity:**
 1. **Đã migrate** — bảng tồn tại trong database (Identity + RefreshToken)
@@ -808,7 +808,7 @@ dotnet ef database update \
 
 4. **Soft Delete mặc định** — filter `deleted_at IS NULL` trong mọi query. Dùng Global Query Filter của EF Core để tránh quên.
 
-5. **PostgreSQL dùng `timestamptz`** — luôn lưu UTC, convert múi giờ ở Application layer.
+5. **SQL Server dùng `datetime2`** — luôn lưu UTC, convert múi giờ ở Application layer.
 
 6. **ULID vs UUID** — Travel và Chat module dùng ULID (có thứ tự thời gian, tốt cho index). Financial module dùng UUID. Nên thống nhất về một loại.
 

@@ -20,8 +20,9 @@ Backend API cho nền tảng quản lý tài chính cá nhân & du lịch nhóm,
 | .NET | 10.0 | Runtime |
 | ASP.NET Core | 10.0 | Web framework |
 | Entity Framework Core | 10.0.5 | ORM — thao tác ghi |
-| Npgsql | 10.0.1 | Provider PostgreSQL |
-| PostgreSQL | — | Database chính |
+| Microsoft.EntityFrameworkCore.SqlServer | 10.0.5 | Provider SQL Server |
+| Microsoft.Data.SqlClient | 7.0.0 | Driver SQL Server |
+| SQL Server | — | Database chính |
 | ASP.NET Core Identity | 10.0.5 | Quản lý người dùng, băm mật khẩu, khóa tài khoản |
 | JWT Bearer | 10.0.6 | Xác thực access token |
 | MediatR | 12.1.1 | CQRS — commands & queries |
@@ -252,7 +253,7 @@ sequenceDiagram
     participant MP as MediatR Pipeline
     participant H as Command/Query Handler
     participant Svc as Service (IIdentityService)
-    participant DB as Database (PostgreSQL/Redis)
+    participant DB as Database (SQL Server/Redis)
 
     Client->>MW: HTTP Request (kèm JWT Bearer)
     
@@ -303,7 +304,7 @@ sequenceDiagram
 | 9 | **ValidationBehavior** | Pipeline behavior của MediatR. Chạy tất cả `IValidator<TRequest>` đã đăng ký. Throw `ValidationException` nếu lỗi. |
 | 10 | **Handler** | Mỏng: inject service interface, ủy quyền ngay (thường 1 dòng). |
 | 11 | **Service** | Điều phối business logic. Dùng `UserManager`, `TokenService`, `EmailService`, `Redis`, `Hangfire`. |
-| 12 | **Database** | PostgreSQL (EF Core cho ghi, Dapper/SqlKata cho đọc), Redis (OTP, cache, Hangfire storage). |
+| 12 | **Database** | SQL Server (EF Core cho ghi, Dapper/SqlKata cho đọc), Redis (OTP, cache, Hangfire storage). |
 | 13 | **Response** | Handler trả về `Result<T>`. Controller chuyển thành HTTP response. |
 
 ---
@@ -573,7 +574,7 @@ app.Run();
 
 ### Các Key Cấu Hình Quan Trọng (User Secrets hoặc env)
 ```
-ConnectionStrings:Default        — PostgreSQL
+ConnectionStrings:Default        — SQL Server
 ConnectionStrings:Redis          — Redis
 AppSettings:JwtKey               — Khóa HMAC (32+ ký tự)
 AppSettings:JwtIssuer            — VD: https://api.travelnow.com

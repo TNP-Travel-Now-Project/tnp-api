@@ -19,8 +19,9 @@ Backend API cho nền tảng quản lý du lịch & tài chính cá nhân. Ngư�
 | .NET | 10.0 | Runtime & SDK |
 | ASP.NET Core | 10.0 | Web framework |
 | Entity Framework Core | 10.0.5 | ORM (thao tác ghi) |
-| Npgsql | 10.0.1 | Driver PostgreSQL |
-| PostgreSQL | — | Database chính |
+| Microsoft.EntityFrameworkCore.SqlServer | 10.0.5 | Provider SQL Server |
+| Microsoft.Data.SqlClient | 7.0.0 | Driver SQL Server |
+| SQL Server | — | Database chính |
 | ASP.NET Core Identity | 10.0.5 | Quản lý user, băm mật khẩu, lockout |
 | JWT Bearer | 10.0.6 | Xác thực access token |
 | MediatR | 12.1.1 | CQRS (commands/queries) |
@@ -171,7 +172,7 @@ Client Request
 └──────────┬───────────┘
            │
            ▼
-     PostgreSQL / Redis
+     SQL Server / Redis
            │
            ▼
     Response ← JSON
@@ -185,7 +186,7 @@ sequenceDiagram
     participant MP as MediatR Pipeline
     participant H as Handler
     participant Svc as Service
-    participant DB as PostgreSQL/Redis
+    participant DB as SQL Server/Redis
 
     Client->>MW: HTTP Request
     MW->>MW: ExceptionMiddleware
@@ -347,7 +348,7 @@ services.AddInfrastructure(config, connectionString) qua extension static
 ## 7. Thiết Kế Database
 
 ### Database Server
-**PostgreSQL** qua provider Npgsql. Connection string key: `Default` trong cấu hình.
+**SQL Server** qua provider `Microsoft.EntityFrameworkCore.SqlServer`. Connection string key: `Default` trong cấu hình.
 
 ### Các Bảng Chính (từ Migration)
 
@@ -597,7 +598,7 @@ Các giá trị này **không có** trong appsettings.json, phải được cung
 
 | Key | Ví dụ | Mục đích |
 |-----|-------|----------|
-| `ConnectionStrings:Default` | `Host=...;Database=...` | Kết nối PostgreSQL |
+| `ConnectionStrings:Default` | `Server=...;Database=...;TrustServerCertificate=True;...` | Kết nối SQL Server |
 | `ConnectionStrings:Redis` | `localhost:6379` | Kết nối Redis |
 | `AppSettings:JwtKey` | Chuỗi 32+ ký tự | Khóa ký JWT |
 | `AppSettings:JwtIssuer` | `https://api.travelnow.com` | Issuer JWT |
@@ -613,7 +614,7 @@ Bound từ section `AppSettings`: `FrontendUrl`, `JwtKey`, `JwtIssuer`, `JwtAudi
 
 ### Program.cs Cấu Hình
 1. `AddApplication()` — MediatR + FluentValidation + ValidationBehavior
-2. `AddInfrastructure()` — EF Core (Npgsql), Identity, Redis (cache + SignalR + Hangfire), SqlKata, Dapper, Services
+2. `AddInfrastructure()` — EF Core (SqlServer), Identity, Redis (cache + SignalR + Hangfire), SqlKata, Dapper, Services
 3. CORS policy `AllowNextJS` (origin từ `Frontend:Url`, allow credentials)
 4. JWT Bearer với custom events (OnMessageReceived, OnChallenge, OnAuthenticationFailed)
 5. Cookie policy (SameSite=None, Secure)
@@ -712,7 +713,7 @@ Bound từ section `AppSettings`: `FrontendUrl`, `JwtKey`, `JwtIssuer`, `JwtAudi
 18. **Mapster** được khai báo trong dependencies nhưng KHÔNG được dùng. Project dùng mapping thủ công.
 19. **Domain entity `Users`** (trong Domain project) tách biệt với `ApplicationUser` (trong Infrastructure). `Users` là DDD entity còn `ApplicationUser` là Identity framework entity. Cùng một concept nhưng đang disconnected.
 20. **Password validation rules bị duplicate** trong cả `LoginCommandValidator` và `RegisterCommandValidator`.
-21. **Connection strings** cho EF Core (Npgsql) và Dapper/SqlKata (`SqlConnection` với `SqlServerCompiler`) dùng CHUNG key `Default` nhưng provider khác nhau — EF Core dùng Npgsql (PostgreSQL), SqlKata dùng `SqlServerCompiler` (SQL Server). **Không nhất quán**.
+21. ~~**Connection strings** cho EF Core (Npgsql) và Dapper/SqlKata (`SqlConnection` với `SqlServerCompiler`) dùng CHUNG key `Default` nhưng provider khác nhau.~~ — đã đồng bộ: cả EF Core và SqlKata/Dapper đều dùng SQL Server qua `Microsoft.Data.SqlClient`.
 
 ---
 
@@ -845,7 +846,7 @@ Thêm `services.AddScoped<ICategoryService, CategoryService>()` trong `AuthApi.I
 
 | Vấn đề | Vị trí | Ảnh hưởng | Đề xuất |
 |--------|--------|-----------|---------|
-| **SqlKata dùng SqlServerCompiler nhưng DB là PostgreSQL** | `DependencyInjection.cs:44` | SQL syntax sai cho PostgreSQL | Đổi thành `PostgresCompiler` |
+| ~~**SqlKata dùng SqlServerCompiler nhưng DB là PostgreSQL**~~ | — | — | Đã chuyển sang SQL Server, `SqlServerCompiler` khớp với DB. |
 | **HSTS bật ở dev, tắt ở prod** | `SecureHeadersMiddleware.cs:40` | Prod thiếu HSTS | Sửa thành `if (!isdev)` |
 | **Controller trống (endpoint đã comment hết)** | `AuthController.cs` | Chỉ 1 endpoint login hoạt động | Mở lại hoặc xóa code chết |
 | **UserController hoàn toàn bị comment** | `UserController.cs` | Không có endpoint user | Mở lại hoặc implement lại |
@@ -898,7 +899,7 @@ Bên dưới là tài liệu tham khảo kỹ thuật cô đọng (~1400 từ) c
 - **Tên**: Travel Now Platform (TNP) API
 - **Solution**: AuthApi.slnx (4 projects)
 - **Target**: .NET 10.0
-- **Database**: PostgreSQL (Npgsql) + Redis
+- **Database**: SQL Server (Microsoft.EntityFrameworkCore.SqlServer) + Redis
 - **Auth**: JWT Bearer (HMAC-SHA256, 15 phút) + Refresh Token (30 ngày, cookie) + CSRF Token
 
 ## Kiến Trúc
@@ -910,8 +911,8 @@ Bên dưới là tài liệu tham khảo kỹ thuật cô đọng (~1400 từ) c
 
 ## Công Nghệ Chính
 - ASP.NET Core Identity (Guid PK, custom ApplicationUser FirstName/LastName/DOB)
-- Entity Framework Core 10 + Npgsql (phía ghi)
-- Dapper + SqlKata (phía đọc) — NHƯNG SqlKata dùng SqlServerCompiler còn DB là PostgreSQL (bug)
+- Entity Framework Core 10 + Microsoft.EntityFrameworkCore.SqlServer (phía ghi)
+- Dapper + SqlKata (phía đọc) — SqlKata dùng SqlServerCompiler khớp với SQL Server DB
 - MediatR 12 (CQRS), FluentValidation 12 (pipeline validation)
 - Hangfire (tác vụ nền: email, cleanup, định kỳ)
 - Redis (cache, SignalR backplane, Hangfire storage, OTP storage)
@@ -1009,7 +1010,7 @@ WebApi/
 11. EF Config + Migration
 
 ## Bug Critical Đã Biết
-1. SqlKata dùng SqlServerCompiler nhưng database là PostgreSQL → đổi thành PostgresCompiler
+1. ~~SqlKata dùng SqlServerCompiler nhưng database là PostgreSQL~~ → đã chuyển sang SQL Server, không còn bug này.
 2. HSTS chỉ bật ở dev (sai condition trong SecureHeadersMiddleware)
 3. AuthController chỉ còn login endpoint hoạt động — tất cả khác bị comment
 4. UserRepository trả stub, không phải data thật

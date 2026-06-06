@@ -595,7 +595,7 @@ catch (Exception)
 
 ### 12.1 Connection strings KHÔNG trong appsettings.json
 **Inferred from:** `appsettings.json` chỉ có Logging + AllowedHosts.
-- `ConnectionStrings:Default` (PostgreSQL) — từ User Secrets (dev) hoặc env (prod).
+- `ConnectionStrings:Default` (SQL Server) — từ User Secrets (dev) hoặc env (prod).
 - `ConnectionStrings:Redis` (Redis) — từ User Secrets (dev) hoặc env (prod).
 
 ### 12.2 JWT key KHÔNG trong appsettings.json
@@ -721,8 +721,7 @@ if (user != null && !user.EmailConfirmed)
 ### 18.1 SqlKata dùng sai SQL Compiler
 **Inferred from:** `DependencyInjection.cs:44`.
 ```csharp
-var compiler = new SqlServerCompiler();  // ❌ SAI: DB là PostgreSQL
-// Phải là: var compiler = new PostgresCompiler();
+var compiler = new SqlServerCompiler();  // ✅ ĐÚNG: DB là SQL Server
 ```
 
 ### 18.2 HSTS bật sai môi trường

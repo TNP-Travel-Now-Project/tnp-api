@@ -7,7 +7,7 @@
 ## Project Identity
 
 - **Name:** Travel Now Platform (TNP) API — `AuthApi.slnx`
-- **Target:** .NET 10.0, PostgreSQL + Redis
+- **Target:** .NET 10.0, SQL Server + Redis
 - **Auth:** JWT Bearer (HMAC-SHA256, 15 phút) + Refresh Token (30 ngày, HttpOnly cookie) + CSRF Token (non-HttpOnly cookie)
 - **Solution:** 4 projects — Domain (pure) ← Application (MediatR CQRS) ← Infrastructure (EF Core, Identity, Redis, Hangfire) ← WebApi (Controllers, Middleware)
 
@@ -40,7 +40,7 @@ Thứ tự middleware KHÔNG được thay đổi. ExceptionMiddleware bắt `Va
 
 ## Database Model
 
-**PostgreSQL** qua Npgsql. Migration hiện tại chỉ có Identity tables + `RefreshToken`.
+**SQL Server** qua `Microsoft.EntityFrameworkCore.SqlServer` (`Microsoft.Data.SqlClient`). Migration hiện tại chỉ có Identity tables + `RefreshToken`.
 
 | Bảng | Vai trò |
 |------|---------|
@@ -110,7 +110,7 @@ TripChatRoom → TripMessage
 
 ## Known Bugs Cần Tránh
 
-1. **SqlKata dùng `SqlServerCompiler` nhưng DB là PostgreSQL** — phải đổi thành `PostgresCompiler` (DependencyInjection.cs:44).
+1. ~~**SqlKata dùng `SqlServerCompiler` nhưng DB là PostgreSQL**~~ — đã chuyển sang SQL Server, `SqlServerCompiler` hiện khớp với DB.
 2. **HSTS bật ở dev, tắt ở prod** — `if (isdev)` phải là `if (!isdev)` (SecureHeadersMiddleware.cs:40).
 3. **AuthController chỉ còn login endpoint active** — tất cả endpoint khác bị comment.
 4. **UserRepository trả stub data** — chưa implement thật.
