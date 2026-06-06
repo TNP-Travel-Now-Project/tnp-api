@@ -209,6 +209,19 @@ Bảng quan trọng nhất. Ghi nhận mọi thu/chi/chuyển tiền.
 
 **Business meaning**: Quản lý nợ (thẻ tín dụng, vay). `current_balance` là cache.
 
+##### DebtPayment
+| Field | Type | Notes |
+|-------|------|-------|
+| `id` | UUID PK | |
+| `debt_id` | FK → Debt | |
+| `amount` | DECIMAL | |
+| `payment_date` | DATE | Ngày trả thực tế |
+| `note` | TEXT | |
+| `created_at` | TIMESTAMPTZ | Audit |
+| `created_by_id` | UUID FK → Users | User ghi nhận |
+
+**Business meaning**: Lịch sử các lần trả nợ. `Debt.current_balance` = `initial_amount` - SUM(`DebtPayment.amount`). Cần bảng này để audit và khôi phục nếu cache bị sai.
+
 ##### Tag / TransactionTag
 **Tag**
 | Field | Type | Notes |
@@ -305,8 +318,11 @@ Bảng quan trọng nhất. Ghi nhận mọi thu/chi/chuyển tiền.
 | `id` | ULID PK | |
 | `trip_id` | FK → Trip | |
 | `paid_by_id` | FK → TripMember | Người trả tiền |
-| `category_id` | FK → Category | |
-| `amount` | DECIMAL(18,2) | |
+| `category_id` | FK → Category, NULL | |
+| `amount` | DECIMAL(18,2) | Số tiền trong `currency` gốc |
+| `currency` | VARCHAR(3) | Mã tiền tệ gốc (VD: 'VND', 'USD'), default 'VND' |
+| `exchange_rate_to_trip_currency` | DECIMAL(18,6), NULL | Tỷ giá quy đổi về `trip_currency` tại `expense_date` |
+| `amount_in_trip_currency` | DECIMAL(18,2), NULL | Amount đã quy đổi, NULL nếu currency == trip_currency |
 | `note` | TEXT | |
 | `expense_date` | DATE | |
 | `location` | VARCHAR(255), NULL | |
@@ -314,7 +330,7 @@ Bảng quan trọng nhất. Ghi nhận mọi thu/chi/chuyển tiền.
 | `created_at` | TIMESTAMPTZ | Audit |
 | `deleted_at` | TIMESTAMPTZ | Soft delete |
 
-**Business meaning**: Chi tiêu nhóm trong chuyến đi. Kết nối Travel ↔ Financial.
+**Business meaning**: Chi tiêu nhóm trong chuyến đi. Kết nối Travel ↔ Financial. Hỗ trợ multi-currency với auto-convert về `trip_currency`.
 
 ##### TripExpenseSplit
 | Field | Type | Notes |
@@ -336,6 +352,7 @@ Bảng quan trọng nhất. Ghi nhận mọi thu/chi/chuyển tiền.
 | `to_member_id` | FK → TripMember | Người được nợ |
 | `amount` | DECIMAL(18,2) | |
 | `settled_date` | DATE | |
+| `status` | ENUM | Pending, Completed, Cancelled |
 | `note` | TEXT | |
 
 **Business meaning**: Ghi nhận thanh toán thực tế giữa các thành viên để dứt điểm nợ.
@@ -367,6 +384,12 @@ Bảng quan trọng nhất. Ghi nhận mọi thu/chi/chuyển tiền.
 | `deleted_at` | TIMESTAMPTZ | Soft delete |
 
 **Business meaning**: Tin nhắn chat. Hỗ trợ rich content qua metadata JSONB.
+
+**Metadata schema theo `message_type`:**
+- `ActivityCard`: `{ "activityId": "ulid", "activityDate": "2026-06-16", "title": "...", "location": "...", "startTime": "08:00" }`
+- `ExpenseCard`: `{ "expenseId": "ulid", "amount": 1250000, "currency": "VND", "paidByName": "...", "splitType": "Equal|Custom" }`
+- `PlaceCard`: `{ "placeId": "ulid", "name": "...", "address": "...", "lat": 16.054, "lng": 108.202, "googleMapsUrl": "..." }`
+- `System`: `{ "eventType": "ExpenseAdded|MemberJoined|...", "referenceId": "ulid", "amount": 1250000 }`
 
 ---
 
@@ -508,7 +531,7 @@ Một trong những design quan trọng nhất của hệ thống: **cache field
 | `Trip.total_spent` | `TripExpense` WHERE trip_id = ? | SUM(amount) |
 | `TripMember.balance` | `TripExpenseSplit` WHERE trip_member_id = ? | SUM(share_amount) - SUM(paid_amount) |
 | `SavingGoal.current_amount` | `Transaction` liên kết | SUM(contributions) |
-| `Debt.current_balance` | `Transaction` + `DebtPayment` | initial_amount - SUM(payments) |
+| `Debt.current_balance` | `DebtPayment` | `initial_amount` - SUM(`DebtPayment.amount`) |
 
 **Quy tắc:** Cache chỉ dùng để hiển thị nhanh. Khi cần độ chính xác tuyệt đối (báo cáo, tổng kết), luôn query từ source of truth.
 
