@@ -67,9 +67,9 @@ Tất cả docs nằm trong `AuthApi.WebApi/docs/`:
 |------|----------|
 | [01_BACKEND_ARCHITECTURE.md](AuthApi.WebApi/docs/01_BACKEND_ARCHITECTURE.md) | Kiến trúc, request flow, auth, DI, conventions |
 | [02_DATABASE_SCHEMA.md](AuthApi.WebApi/docs/02_DATABASE_SCHEMA.md) | 26 entities, 3 aggregates, source-of-truth, indexes |
-| [03_RULES.md](AuthApi.WebApi/docs/03_RULES.md) | 80+ quy tắc ngầm, 13-step feature pattern |
-| [04_AI_CONTEXT.md](AuthApi.WebApi/docs/04_AI_CONTEXT.md) | Tóm tắt 30s cho AI dev tiếp |
-| [BUSINESS_DOMAIN.md](AuthApi.WebApi/docs/BUSINESS_DOMAIN.md) | Yêu cầu nghiệp vụ gốc (Financial + Travel + Chat) |
+| [03_RULES.md](AuthApi.WebApi/docs/03_RULES.md) | các quy tắc (80+), 13-step feature pattern |
+| [04_AI_CONTEXT.md](AuthApi.WebApi/docs/04_AI_CONTEXT.md) | Tóm tắt cho AI |
+| [BUSINESS_DOMAIN.md](AuthApi.WebApi/docs/BUSINESS_DOMAIN.md) | Yêu cầu nghiệp vụ (Financial + Travel + Chat) |
 | [TECHNICAL_DOCUMENTATION.md](AuthApi.WebApi/docs/TECHNICAL_DOCUMENTATION.md) | Full 16-section technical doc |
 
 ## Quy Tắc Phát Triển (Key)
