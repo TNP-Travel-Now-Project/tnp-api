@@ -16,5 +16,6 @@ namespace AuthApi.Application.Common
         public const string TokenGenerationError = "TOKEN_GENERATION_ERROR";
         public const string ValidationError = "VALIDATION_ERROR";
         public const string GeneralError = "GENERAL_ERROR";
+        public const string InternalError = "INTERNAL_ERROR";
     }
 }

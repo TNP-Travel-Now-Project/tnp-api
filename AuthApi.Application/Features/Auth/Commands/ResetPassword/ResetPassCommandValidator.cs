@@ -1,4 +1,5 @@
-﻿using FluentValidation;
+﻿using AuthApi.Application.Common;
+using FluentValidation;
 
 namespace AuthApi.Application.Features.Auth.Commands.ResetPassword
 {
@@ -7,20 +8,21 @@ namespace AuthApi.Application.Features.Auth.Commands.ResetPassword
         public ResetPassCommandValidator()
         {
             RuleFor(p => p.Email)
-                .NotEmpty().WithMessage("Email is not empty")
-                .EmailAddress().WithMessage("Email wrong format");
+                .NotEmpty().WithMessage(ValidationMessages.FieldRequired)
+                .EmailAddress().WithMessage(ValidationMessages.EmailInvalid);
 
             RuleFor(p => p.Otp)
-                .NotEmpty().WithMessage("OTP is not empty")
-                .Length(4).WithMessage("OTP code must have 4 digits");
+                .NotEmpty().WithMessage(ValidationMessages.OtpRequired)
+                .Length(4).WithMessage(ValidationMessages.OtpLength)
+                .Matches("^[0-9]+$").WithMessage(ValidationMessages.OtpDigits);
 
             RuleFor(p => p.NewPass)
-                .NotEmpty().WithMessage("Password is not empty")
-                .Length(8, 20)
-                .Matches("[A-Z]").WithMessage("Password must contain at least one uppercase letter")
-                .Matches("[a-z]").WithMessage("Password must contain at least one lowercase letter")
-                .Matches("[0-9]").WithMessage("Password must contain at least one number")
-                .Matches("[~!@#$%^&*()_+=?]").WithMessage("Password must cotain at least one special character");
+                .NotEmpty().WithMessage(ValidationMessages.FieldRequired)
+                .Length(8, 20).WithMessage(ValidationMessages.PasswordLengthRange)
+                .Matches("[A-Z]").WithMessage(ValidationMessages.PasswordRequiresUppercase)
+                .Matches("[a-z]").WithMessage(ValidationMessages.PasswordRequiresLowercase)
+                .Matches("[0-9]").WithMessage(ValidationMessages.PasswordRequiresDigit)
+                .Matches("[~!@#$%^&*()_+=?]").WithMessage(ValidationMessages.PasswordRequiresSpecial);
         }
     }
 }

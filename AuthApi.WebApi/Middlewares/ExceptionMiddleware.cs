@@ -1,4 +1,5 @@
 using System.Net;
+using AuthApi.Application.Common;
 using FluentValidation;
 
 namespace AuthApi.WebApi.Middlewares
@@ -31,8 +32,8 @@ namespace AuthApi.WebApi.Middlewares
 
                 var response = new ApiErrorResponse
                 {
-                    Code = "VALIDATION_ERROR",
-                    Message = "Validation failed",
+                    Code = ErrorCodes.ValidationError,
+                    Message = ValidationMessages.ValidationFailed,
                     Errors = errors
                 };
 
@@ -44,8 +45,8 @@ namespace AuthApi.WebApi.Middlewares
 
                 var response = new ApiErrorResponse
                 {
-                    Code = "INTERNAL_ERROR",
-                    Message = "An internal server error occurred"
+                    Code = ErrorCodes.InternalError,
+                    Message = ValidationMessages.InternalServerError
                 };
 
                 await context.Response.WriteAsJsonAsync(response);

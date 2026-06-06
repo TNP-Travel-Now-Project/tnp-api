@@ -6,8 +6,8 @@ using AuthApi.Application.Features.Auth.DTOs.Auth.Login;
 namespace AuthApi.Application.Features.Auth.Commands.Login
 {
     public sealed record LoginCommand(
-        [Required, EmailAddress] string Email,
-        [Required] string Password,
+        string Email,
+        string Password,
         bool RememberMe
-    ) : ICommand<Result<LoginResponse>>;    
+    ) : ICommand<Result<LoginResponse>>;
 }
