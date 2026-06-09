@@ -1,5 +1,8 @@
 ﻿using AuthApi.Application.Abstractions.Interfaces.Repositories;
 using AuthApi.Application.Common;
+using AuthApi.Application.Features.Users.Commands.AssignRoles;
+using AuthApi.Application.Features.Users.Commands.RemoveRoles;
+using AuthApi.Application.Features.Users.Commands.UpdateUser;
 using AuthApi.Application.Features.Users.DTOs;
 using AuthApi.Application.Features.Users.Queries.GetUserById;
 using AuthApi.Application.Features.Users.Queries.Me;
@@ -13,7 +16,8 @@ namespace AuthApi.WebApi.Controllers
     [ApiController]
     public class UserController(
         IMediator _mediator,
-        IUserReadRepository _userRepo) : ControllerBase
+        IUserReadRepository _userRepo,
+        IUserWriteRepository _userWriteRepo) : ControllerBase
     {
         [HttpGet]
         [AllowAnonymous]
@@ -64,5 +68,62 @@ namespace AuthApi.WebApi.Controllers
                 : BadRequest(new ApiErrorResponse(result.Error!));
         }
 
+        [HttpPut("{id:guid}")]
+        [Authorize(Policy = "RequireAdmin")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> UpdateUser(Guid id, UpdateUserRequest request)
+        {
+            await _mediator.Send(new UpdateUserCommand(
+                id,
+                request.FirstName,
+                request.LastName,
+                request.PhoneNumber,
+                request.DateOfBirth));
+
+            return NoContent();
+        }
+
+        [HttpPost("{id:guid}/roles")]
+        [Authorize(Policy = "RequireAdmin")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status403Forbidden)]
+        public async Task<IActionResult> AssignRoles(Guid id, string[] roles)
+        {
+            await _mediator.Send(new AssignRolesCommand(id, roles));
+            return NoContent();
+        }
+
+        [HttpDelete("{id:guid}/roles")]
+        [Authorize(Policy = "RequireAdmin")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status403Forbidden)]
+        public async Task<IActionResult> RemoveRoles(Guid id, string[] roles)
+        {
+            await _mediator.Send(new RemoveRolesCommand(id, roles));
+            return NoContent();
+        }
+
+        [HttpDelete("{id:guid}")]
+        [Authorize(Policy = "RequireAdmin")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> LockoutUser(Guid id)
+        {
+            var updated = await _userWriteRepo.SoftDeleteUserAsync(id);
+            if (!updated)
+                return NotFound(new ApiErrorResponse(new Error(ErrorCodes.NotFound, $"User with ID {id} not found")));
+
+            return NoContent();
+        }
     }
 }
