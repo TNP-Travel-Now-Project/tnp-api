@@ -132,6 +132,21 @@ namespace AuthApi.WebApi
             });
             #endregion
 
+            #region config Authorization Policies
+            builder.Services.AddAuthorization(options =>
+            {
+                options.AddPolicy("RequireAdmin", policy =>
+                    policy.RequireRole("Admin"));
+
+                options.AddPolicy("RequireUser", policy =>
+                    policy.RequireRole("User"));
+
+                options.AddPolicy("RequireAdminOrUser", policy =>
+                    policy.RequireAssertion(ctx =>
+                        ctx.User.IsInRole("Admin") || ctx.User.IsInRole("User")));
+            });
+            #endregion
+
             #region Setup CookiePolicyOptions
             builder.Services.Configure<CookiePolicyOptions>(options =>
             {
