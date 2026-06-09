@@ -8,6 +8,12 @@
   </PropertyGroup>
 
 	<ItemGroup>
+		<AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+			<_Parameter1>AuthApi.IntegrationTests</_Parameter1>
+		</AssemblyAttribute>
+	</ItemGroup>
+
+	<ItemGroup>
 		<PackageReference Include="Dapper" Version="2.1.72" />
 		<PackageReference Include="DnsClient" Version="1.8.0" />
 		<PackageReference Include="Hangfire" Version="1.8.23" />
@@ -27,8 +33,6 @@
 		<PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.5" />
 		<PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="6.0.1" />
 		<PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.5" />
-		<PackageReference Include="SqlKata" Version="4.0.1" />
-		<PackageReference Include="SqlKata.Execution" Version="4.0.1" />
 		<PackageReference Include="StackExchange.Redis" Version="2.12.14" />
 	</ItemGroup>
 

@@ -1,14 +1,16 @@
 ﻿using AuthApi.Application.Abstractions.Interfaces.Auth;
+using AuthApi.Application.Abstractions.Interfaces.Cache;
 using AuthApi.Application.Abstractions.Interfaces.Email;
 using AuthApi.Application.Abstractions.Interfaces.Repositories;
 using AuthApi.Application.Abstractions.Repositories.Email;
+using AuthApi.Application.Common.Security;
 using AuthApi.Application.Features.Auth.Commands.Register;
-using AuthApi.Domain.Interfaces;
 using AuthApi.Infrastructure.Identities;
 using AuthApi.Infrastructure.Persistence;
 using AuthApi.Infrastructure.Persistence.Connection;
-using AuthApi.Infrastructure.Persistence.Repositories.Users;
+using AuthApi.Infrastructure.Persistence.Dapper.Repositories;
 using AuthApi.Infrastructure.Services.Auth;
+using AuthApi.Infrastructure.Services.Cache;
 using AuthApi.Infrastructure.Services.Email;
 using AuthApi.Infrastructure.Services.Token;
 using FluentValidation;
@@ -19,10 +21,7 @@ using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using SqlKata.Compilers;
-using SqlKata.Execution;
 using StackExchange.Redis;
-using System.Data;
 
 namespace AuthApi.Infrastructure.Configuration
 {
@@ -31,19 +30,6 @@ namespace AuthApi.Infrastructure.Configuration
         // Config DI Infrastructure Layer
         public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration config, string connectionString)
         {
-            #region SqlKata DI
-            services.AddScoped<IDbConnection>(sp =>
-                new SqlConnection(config.GetConnectionString("Default")));
-
-            services.AddScoped<QueryFactory>(sp =>
-            {
-                var connection = sp.GetRequiredService<IDbConnection>();
-                var compiler = new SqlServerCompiler();
-
-                return new QueryFactory(connection, compiler);
-            });
-            #endregion
-
             #region Dapper DI
             services.AddScoped<IDbConnectionFactory, DbConnectionFactory>();
             #endregion
@@ -82,13 +68,15 @@ namespace AuthApi.Infrastructure.Configuration
             #endregion
 
             #region Service DI
-            services.AddScoped<IUserRepository, UserRepository>();
-            services.AddScoped<IUserQueryRepository, UserQueryRepository>();
+            services.AddScoped<IUserReadRepository, UserReadRepository>();
+            services.AddScoped<IUserWriteRepository, UserWriteRepository>();
 
             services.AddScoped<ITokenService, TokenService>();
             services.AddScoped<IIdentityService, IdentityService>();
             services.AddScoped<IAuthCookieService, AuthCookieService>();
-            services.AddScoped<ICurrentUserService, CurrentUserService>();
+            services.AddScoped<IUserContext, HttpUserContext>();
+
+            services.AddScoped<ICacheService, RedisCacheService>();
 
             services.AddScoped<IEmailService, EmailService>();
             services.AddScoped<IEmailChecker, EmailChecker>();
