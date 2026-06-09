@@ -3,7 +3,9 @@ using AuthApi.Infrastructure.Common;
 using AuthApi.Infrastructure.Configuration;
 using AuthApi.Infrastructure.Identities;
 using AuthApi.Infrastructure.Identities.Seeds;
+using AuthApi.Infrastructure.Persistence;
 using AuthApi.Infrastructure.Services.Auth;
+using AuthApi.WebApi.HealthChecks;
 using AuthApi.Infrastructure.Services.ConvertType;
 using AuthApi.WebApi.Middlewares;
 using Dapper;
@@ -11,8 +13,11 @@ using Hangfire;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.CookiePolicy;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using HealthChecks.UI.Client;
 using Microsoft.OpenApi;
+using Serilog;
 using System.Text;
 
 namespace AuthApi.WebApi
@@ -21,7 +26,37 @@ namespace AuthApi.WebApi
     {
         public static async Task Main(string[] args)
         {
+            // Serilog: cấu hình từ appsettings.json + environment variables
+            Log.Logger = new LoggerConfiguration()
+                .ReadFrom.Configuration(new ConfigurationBuilder()
+                    .SetBasePath(Directory.GetCurrentDirectory())
+                    .AddJsonFile("appsettings.json", optional: false)
+                    .AddJsonFile($"appsettings.{Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production"}.json", optional: true)
+                    .AddEnvironmentVariables()
+                    .Build())
+                .CreateLogger();
+
+            try
+            {
+                Log.Information("Starting application");
+                await BuildAndRun(args);
+            }
+            catch (Exception ex)
+            {
+                Log.Fatal(ex, "Application terminated unexpectedly");
+            }
+            finally
+            {
+                await Log.CloseAndFlushAsync();
+            }
+        }
+
+        private static async Task BuildAndRun(string[] args)
+        {
             var builder = WebApplication.CreateBuilder(args);
+
+            // Serilog cho toàn bộ host
+            builder.Host.UseSerilog();
 
             builder.Services.AddControllers();
 
@@ -104,7 +139,7 @@ namespace AuthApi.WebApi
 
                     OnAuthenticationFailed = context =>
                     {
-                        Console.WriteLine($"Authentication failed: {context.Exception.Message}");
+                        Log.Warning(context.Exception, "Authentication failed");
 
                         if (context.Exception is SecurityTokenExpiredException)
                         {
@@ -131,6 +166,16 @@ namespace AuthApi.WebApi
                     }
                 };
             });
+            #endregion
+
+            #region Health Checks
+            builder.Services.AddHealthChecks()
+                .AddDbContextCheck<AppDbContext>(
+                    name: "sqlserver",
+                    tags: ["db", "sql"])
+                .AddCheck<RedisHealthCheck>(
+                    name: "redis",
+                    tags: ["cache", "redis"]);
             #endregion
 
             #region config Authorization Policies
@@ -206,6 +251,15 @@ namespace AuthApi.WebApi
 
             var app = builder.Build();
 
+            #region Auto migrate (Docker)
+            if (args.Contains("--migrate"))
+            {
+                using var scope = app.Services.CreateScope();
+                var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                await db.Database.MigrateAsync();
+            }
+            #endregion
+
             #region Seeds role
             using (var scope = app.Services.CreateScope())
             {
@@ -244,6 +298,12 @@ namespace AuthApi.WebApi
             app.UseMiddleware<CSRFMiddleware>();
 
             app.UseAuthorization();
+
+            // Health check endpoint — Docker + Load Balancer dùng để biết app còn sống
+            app.MapHealthChecks("/health", new()
+            {
+                ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
+            });
 
             app.MapControllers();
 
