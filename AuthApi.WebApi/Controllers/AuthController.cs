@@ -20,14 +20,6 @@ namespace AuthApi.WebApi.Controllers
     [Route("api/auth"), ApiController]
     public class AuthController(IMediator mediator) : ControllerBase
     {
-        [HttpGet("me")]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status401Unauthorized)]
-        public IActionResult Me()
-        {
-            return Ok(new { Authenticated = User.Identity?.IsAuthenticated ?? false });
-        }
-
         [HttpPost("login")]
         [ProducesResponseType(typeof(LoginResponse), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]

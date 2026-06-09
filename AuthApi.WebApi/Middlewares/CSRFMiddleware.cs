@@ -4,7 +4,7 @@ namespace AuthApi.WebApi.Middlewares
 {
     public class CSRFMiddleware(RequestDelegate _next)
     {
-       private string apiAuth { get; } = "/api/auth";
+        private string apiAuth { get; } = "/api/auth";
 
         private readonly string[] SafeMethods = {
             HttpMethods.Get,

@@ -6,5 +6,5 @@
         DateTime expired,
         Guid userId,
         string email,
-        string role);
+        string[] roles);
 }

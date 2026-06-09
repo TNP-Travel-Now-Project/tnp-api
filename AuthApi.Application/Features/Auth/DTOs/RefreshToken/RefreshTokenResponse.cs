@@ -2,6 +2,6 @@
 {
     public sealed record RefreshTokenResponse(
         string accessToken,
-        string? refreshtoken, 
+        string? refreshtoken,
         DateTime expiredAt);
 }

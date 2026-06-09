@@ -10,7 +10,7 @@ namespace AuthApi.Application.Features.Users.DTOs
         public DateOnly DateOfBirth { get; init; }
         public string? PhoneNumber { get; init; }
         public bool EmailConfirmed { get; init; }
-        public string? Role { get; init; }
+        public string[] Roles { get; init; } = [];
         public DateTime CreatedAt { get; init; }
         public DateTime? UpdatedAt { get; init; }
     }

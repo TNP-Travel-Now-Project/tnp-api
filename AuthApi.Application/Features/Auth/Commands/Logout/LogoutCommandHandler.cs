@@ -7,7 +7,7 @@ namespace AuthApi.Application.Features.Auth.Commands.Logout
 {
     public class LogoutCommandHandler(IIdentityService _identities) : IRequestHandler<LogoutCommand, Result<LogoutResponse>>
     {
-        public async Task<Result<LogoutResponse>> Handle(LogoutCommand request, CancellationToken cancellationToken) 
+        public async Task<Result<LogoutResponse>> Handle(LogoutCommand request, CancellationToken cancellationToken)
                     => await _identities.LogoutAsync(request);
     }
 }

@@ -61,14 +61,13 @@ namespace AuthApi.Infrastructure.Services.Auth
             await _userManager.ResetAccessFailedCountAsync(user);
 
             var roles = await _userManager.GetRolesAsync(user);
-            string roleName = string.Join(", ", roles);
 
             var userDto = new AuthUserDto
             {
                 Id = user.Id,
                 Email = user.Email ?? string.Empty,
                 UserName = user.UserName!,
-                Role = roleName
+                Roles = [.. roles]
             };
 
             var token = await _tokenService.GenerateTokensAsync(userDto, roles);
@@ -80,14 +79,14 @@ namespace AuthApi.Infrastructure.Services.Auth
                     expired: token.AccessTokenExpiresAt,
                     userId: user.Id,
                     email: user.Email!,
-                    role: roleName)
+                    roles: [.. roles])
             );
         }
 
         public async Task<Result<LogoutResponse>> LogoutAsync(LogoutCommand request)
         {
             await _tokenService.RevokeRefreshTokenAsync();
-            _tokenHandler.ClearTokens(); 
+            _tokenHandler.ClearTokens();
 
             return Result<LogoutResponse>.Success(
                 new LogoutResponse(Message: "Logout successful"));

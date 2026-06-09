@@ -109,7 +109,7 @@ namespace AuthApi.Infrastructure.Services.Token
                 Id = user.Id,
                 Email = user.Email ?? string.Empty,
                 UserName = user.UserName!,
-                Role = string.Join(", ", roles)
+                Roles = [.. roles]
             }, roles);
         }
 

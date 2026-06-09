@@ -6,8 +6,8 @@ namespace AuthApi.Application.Abstractions.Interfaces.Auth
     public interface ITokenService
     {
         Task<AuthResponse> GenerateTokensAsync(
-            AuthUserDto user, 
-            IList<string> roles, 
+            AuthUserDto user,
+            IList<string> roles,
             int expiredDay = 15);
         Task<AuthResponse> RefreshTokenAsync();
         Task RevokeRefreshTokenAsync();
