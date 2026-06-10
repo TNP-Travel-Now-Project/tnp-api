@@ -10,10 +10,10 @@ namespace AuthApi.Application.Features.Users.Queries.Me
     public class MeQueryHandler(
         IUserReadRepository _userRepo,
         IUserContext _context,
-        ICacheService _cache) : IQueryHandler<MeQuery, Result<MeResponse>>
+        ICallCacheService _callCache) : IQueryHandler<MeQuery, Result<MeResponse>>
     {
-        private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(5);
         private const string CacheKeyPrefix = "cache:me:";
+        private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(5);
 
         public async Task<Result<MeResponse>> Handle(MeQuery request, CancellationToken cancellationToken)
         {
@@ -24,7 +24,7 @@ namespace AuthApi.Application.Features.Users.Queries.Me
             var cacheKey = $"{CacheKeyPrefix}{userId}";
 
             // 1. Try cache first
-            var cached = await TryGetCachedAsync(cacheKey, cancellationToken);
+            var cached = await _callCache.TryGetCachedAsync(cacheKey, cancellationToken);
             if (cached != null)
                 return Result<MeResponse>.Success(cached);
 
@@ -33,34 +33,10 @@ namespace AuthApi.Application.Features.Users.Queries.Me
             if (user == null)
                 return Result<MeResponse>.Fail(new Error(ErrorCodes.UserNotFound, "User not found"));
 
-            // 3. Store in cache (fire-and-forget, không block response)
-            await TrySetCacheAsync(cacheKey, user, cancellationToken);
+            // 3. set cache
+            await _callCache.TrySetCacheAsync(cacheKey, user, CacheDuration, cancellationToken);
 
             return Result<MeResponse>.Success(user);
-        }
-
-        private async Task<MeResponse?> TryGetCachedAsync(string key, CancellationToken ct)
-        {
-            try
-            {
-                return await _cache.GetAsync<MeResponse>(key, ct);
-            }
-            catch
-            {
-                return null; // Cache failure → fallback to DB
-            }
-        }
-
-        private async Task TrySetCacheAsync(string key, MeResponse value, CancellationToken ct)
-        {
-            try
-            {
-                await _cache.SetAsync(key, value, CacheDuration, ct);
-            }
-            catch
-            {
-                // Silent fail — cache không quan trọng bằng response
-            }
         }
     }
 }

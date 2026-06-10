@@ -5,15 +5,8 @@ using Dapper;
 
 namespace AuthApi.Infrastructure.Persistence.Dapper.Repositories
 {
-    internal sealed class UserReadRepository : IUserReadRepository
+    internal sealed class UserReadRepository(IDbConnectionFactory _connectionFactory) : IUserReadRepository
     {
-        private readonly IDbConnectionFactory _connectionFactory;
-
-        public UserReadRepository(IDbConnectionFactory connectionFactory)
-        {
-            _connectionFactory = connectionFactory;
-        }
-
         public async Task<MeResponse?> GetMeAsync(Guid userId, CancellationToken cancellationToken = default)
         {
             const string sql = @"
@@ -29,21 +22,28 @@ namespace AuthApi.Infrastructure.Persistence.Dapper.Repositories
                     u.CreatedAt,
                     u.UpdatedAt
                 FROM AspNetUsers u
-                WHERE u.Id = @UserId";
+                WHERE u.Id = @UserId;
 
-            const string rolesSql = @"
                 SELECT r.Name
                 FROM AspNetRoles r
                 INNER JOIN AspNetUserRoles ur ON r.Id = ur.RoleId
-                WHERE ur.UserId = @UserId";
+                WHERE ur.UserId = @UserId;";
 
             using var conn = _connectionFactory.Create();
 
-            var user = await conn.QuerySingleOrDefaultAsync<MeResponse>(sql, new { UserId = userId });
-            if (user == null) return null;
+            var command = new CommandDefinition(
+                sql,
+                new { Userid = userId },
+                cancellationToken: cancellationToken);
 
-            var roles = await conn.QueryAsync<string>(rolesSql, new { UserId = userId });
-            return user with { Roles = roles.ToArray() };
+            using var multi = await conn.QueryMultipleAsync(command);
+
+            var user = await multi.ReadSingleOrDefaultAsync<MeResponse>();
+            if (user is null) return null;
+
+            var roles = (await multi.ReadAsync<string>()).ToArray() ?? [];
+
+            return user with { Roles = roles };
         }
 
         public async Task<List<UserListItemDto>> GetAllUsersAsync(CancellationToken cancellationToken = default)
@@ -69,11 +69,10 @@ namespace AuthApi.Infrastructure.Persistence.Dapper.Repositories
             var users = (await conn.QueryAsync<UserListItemDto>(sql)).ToList();
             if (users.Count == 0) return users;
 
-            var roleRows = await conn.QueryAsync(rolesSql);
+            var roleRows = await conn.QueryAsync<roleRowsDto>(rolesSql);
             var roleLookup = roleRows
-                .Cast<dynamic>()
-                .GroupBy(x => (Guid)x.UserId)
-                .ToDictionary(g => g.Key, g => g.Select(x => (string)x.Role).ToArray());
+                .GroupBy(x => x.UserId)
+                .ToDictionary(g => g.Key, g => g.Select(x => x.Role).ToArray());
 
             for (var i = 0; i < users.Count; i++)
             {
@@ -102,20 +101,26 @@ namespace AuthApi.Infrastructure.Persistence.Dapper.Repositories
                     u.CreatedAt,
                     u.UpdatedAt
                 FROM AspNetUsers u
-                WHERE u.Id = @UserId";
+                WHERE u.Id = @UserId;
 
-            const string rolesSql = @"
                 SELECT r.Name
                 FROM AspNetRoles r
                 INNER JOIN AspNetUserRoles ur ON r.Id = ur.RoleId
-                WHERE ur.UserId = @UserId";
+                WHERE ur.UserId = @UserId;";
 
             using var conn = _connectionFactory.Create();
 
-            var row = await conn.QuerySingleOrDefaultAsync(sql, new { UserId = userId });
+            var command = new CommandDefinition(
+                sql,
+                new { UserId = userId },
+                cancellationToken: cancellationToken);
+
+            using var multi = await conn.QueryMultipleAsync(command);
+
+            var row = await multi.ReadSingleOrDefaultAsync<UserDetailResponse>();
             if (row == null) return null;
 
-            var roles = await conn.QueryAsync<string>(rolesSql, new { UserId = userId });
+            var roles = (await multi.ReadAsync<string>()).ToArray() ?? [];
 
             return new UserDetailResponse
             {
@@ -128,7 +133,7 @@ namespace AuthApi.Infrastructure.Persistence.Dapper.Repositories
                 PhoneNumber = row.PhoneNumber,
                 EmailConfirmed = row.EmailConfirmed,
                 IsLockedOut = row.LockoutEnabled && row.LockoutEnd > DateTimeOffset.UtcNow,
-                Roles = roles.ToArray(),
+                Roles = roles,
                 CreatedAt = row.CreatedAt,
                 UpdatedAt = row.UpdatedAt
             };

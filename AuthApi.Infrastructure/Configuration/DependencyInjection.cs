@@ -77,6 +77,7 @@ namespace AuthApi.Infrastructure.Configuration
             services.AddScoped<IUserContext, HttpUserContext>();
 
             services.AddScoped<ICacheService, RedisCacheService>();
+            services.AddScoped<ICallCacheService, CallCacheService>();
 
             services.AddScoped<IEmailService, EmailService>();
             services.AddScoped<IEmailChecker, EmailChecker>();
