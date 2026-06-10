@@ -17,7 +17,7 @@
 
 - **Clean Architecture + CQRS + DDD hybrid**
 - Domain là pure .NET (zero NuGet). Application chỉ tham chiếu Domain. Infrastructure tham chiếu Application + Domain. WebApi tham chiếu Application + Infrastructure.
-- **CQRS:** Ghi dùng Command → Handler → Service (EF Core). Đọc dùng Query → Handler → QueryRepository (Dapper/SqlKata).
+- **CQRS:** Cả đọc và ghi đều dùng **Dapper** (SqlKata đã xóa). Đọc: Query → Handler → ReadRepository. Ghi: Command → Handler → WriteRepository.
 - **WebApi mỏng:** Controller chỉ gọi `IMediator.Send()` → kiểm tra `result.IsSuccess` → `Ok()` hoặc `BadRequest(apiError)`.
 
 ## Request Flow
@@ -84,7 +84,8 @@ TripChatRoom → TripMessage
 
 | Rule | Ví dụ |
 |------|-------|
-| Controller inject `IMediator` | `AuthController(IMediator mediator)` |
+| Controller inject `IMediator` + `IUserContext` | `UserController(IMediator mediator, IUserContext ctx)` |
+| Controller dùng `result.Match(Ok, HandleFailure)` | Không còn `result.IsSuccess` thủ công |
 | Command là `sealed record` | `sealed record LoginCommand(...) : ICommand<Result<LoginResponse>>` |
 | Handler mỏng (1 dòng) | `=> await service.MethodAsync(request)` |
 | Service trả về `Result<T>` | `Result<T>.Success(value)` / `Result<T>.Fail(error)` |
@@ -94,6 +95,7 @@ TripChatRoom → TripMessage
 | Route: `api/{controller}` | `[Route("api/auth")]` |
 | Namespace = folder path | `Features/Auth/Commands/Login/` |
 | DTO: `sealed record` | `LoginResponse(string accessToken, ...)` |
+| **Roles = string[] (breaking)** | **`role` → `roles` trong mọi DTO** |
 
 ## Hidden Rules (Quan trọng)
 
@@ -110,10 +112,10 @@ TripChatRoom → TripMessage
 
 ## Known Bugs Cần Tránh
 
-1. ~~**SqlKata dùng `SqlServerCompiler` nhưng DB là PostgreSQL**~~ — đã chuyển sang SQL Server, `SqlServerCompiler` hiện khớp với DB.
+1. ~~**SqlKata dùng `SqlServerCompiler` nhưng DB là PostgreSQL**~~ — **SqlKata đã xóa** (Me branch P2).
 2. **HSTS bật ở dev, tắt ở prod** — `if (isdev)` phải là `if (!isdev)` (SecureHeadersMiddleware.cs:40).
-3. **AuthController chỉ còn login endpoint active** — tất cả endpoint khác bị comment.
-4. **UserRepository trả stub data** — chưa implement thật.
+3. ~~**AuthController chỉ còn login endpoint active**~~ — **Đã implement lại UserController** (Me, Detail, List, Update, Roles, Lockout).
+4. ~~**UserRepository trả stub data**~~ — **Đã xóa, thay bằng UserWriteRepository + UserReadRepository** (Dapper).
 5. **Validation đăng ký ở cả Application và Infrastructure** — duplicate.
 6. **RefreshToken không có FK cascade** — orphaned records nếu user bị xóa.
 7. **Admin password hardcoded** — `"Admin@123"` trong `RoleSeeder.cs`.
@@ -144,8 +146,10 @@ TripChatRoom → TripMessage
 | `IIdentityService` | IdentityService | Scoped |
 | `ITokenService` | TokenService | Scoped |
 | `IAuthCookieService` | AuthCookieService | Scoped |
-| `IUserRepository` | UserRepository (stub) | Scoped |
-| `IUserQueryRepository` | UserQueryRepository | Scoped |
+| `IUserReadRepository` | UserReadRepository | Scoped |
+| `IUserWriteRepository` | UserWriteRepository | Scoped |
+| `IUserContext` | HttpUserContext | Scoped |
+| `ICacheService` | RedisCacheService | Singleton |
 | `IEmailService` | EmailService | Scoped |
 | `IEmailChecker` | EmailChecker | Scoped |
 | `IConnectionMultiplexer` | ConnectionMultiplexer | Singleton |

@@ -30,15 +30,17 @@ Domain ← Application ← Infrastructure ← WebApi
 
 ### 1.4 CQRS: ghi dùng Command, đọc dùng Query
 **Inferred from:** Cấu trúc `Features/{Module}/Commands/` và `Features/{Module}/Queries/`.
-- Thao tác ghi (tạo, sửa, xóa) luôn đi qua Command → Handler → Service.
-- Thao tác đọc (lấy danh sách, chi tiết) luôn đi qua Query → Handler → QueryRepository.
+- Thao tác ghi (tạo, sửa, xóa) luôn đi qua Command → Handler → WriteRepository (Dapper).
+- Thao tác đọc (lấy danh sách, chi tiết) luôn đi qua Query → Handler → ReadRepository (Dapper).
+- **Ngoại lệ:** Query đơn giản (list/dashboard) có thể gọi Repository trực tiếp từ Controller.
 - Command không bao giờ trả về dữ liệu danh sách. Query không bao giờ thay đổi dữ liệu.
 
 ### 1.5 WebApi layer phải mỏng
 **Inferred from:** `AuthController.cs` và `UserController.cs` — controller không chứa logic.
-- Controller chỉ làm 3 việc: nhận request → gọi MediatR → trả về response.
-- Controller KHÔNG được gọi DbContext, Repository, hoặc Service trực tiếp.
+- Controller chỉ làm 3 việc: nhận request → gọi MediatR (hoặc Repository cho list đơn giản) → trả về response.
+- Controller KHÔNG được gọi DbContext, hoặc Service trực tiếp.
 - Controller KHÔNG được chứa logic xử lý.
+- **Ngoại lệ:** Có thể inject `IUserReadRepository` trực tiếp cho list endpoint (không cần MediatR).
 
 ---
 
@@ -154,31 +156,47 @@ services.AddSingleton<IConnectionMultiplexer>(redis);       // ✅ Singleton (c�
 ## 4. Repository Rules
 
 ### 4.1 Repository chỉ thao tác database thuần túy
-**Inferred from:** `UserRepository.cs` và `UserQueryRepository.cs`.
+**Inferred from:** `UserReadRepository.cs` và `UserWriteRepository.cs` (Me branch P2, P4).
 - Repository không chứa business logic.
 - Repository không gọi service khác.
 - Repository không gửi email, không enqueue job, không ghi log.
 
-### 4.2 Repository interface ở Domain, implementation ở Infrastructure
-**Inferred from:** `IUserRepository` ở `Domain/Interfaces/`, `UserRepository` ở `Infrastructure/Persistence/Repositories/`.
+### 4.2 Interface ở Application, implementation ở Infrastructure
+**Inferred from:** `IUserReadRepository`, `IUserWriteRepository` ở `Application/Abstractions/Interfaces/Repositories/`.
+- Application định nghĩa contract.
+- Infrastructure implement contract (Dapper).
+- **Domain KHÔNG còn repository interfaces** sau khi xóa `IUserRepository` (Me branch P2).
+
+### 4.3 Cả read và write đều dùng Dapper
+**Inferred from:** `UserReadRepository` và `UserWriteRepository` — cả 2 đều dùng `IDbConnectionFactory` + Dapper.
+- **SqlKata đã xóa** (Me branch P2).
+- **EF Core không dùng cho custom repositories** — chỉ dùng internally bởi Identity.
+- Query dùng 2 SQL queries (user info + roles batch) thay vì JOIN + STRING_AGG.
+
 ```csharp
-// Domain/Interfaces/IUserRepository.cs
-public interface IUserRepository
+// ✅ Mới: cả read và write đều Dapper
+public class UserReadRepository(IDbConnectionFactory cf) : IUserReadRepository
 {
-    Task<Users> AddAsync(Users user);
-    Task<Users?> GetUserByIdAsync(Guid id);
-    Task<int> CommitAsync();
+    public async Task<MeResponse?> GetMeAsync(Guid userId)
+    {
+        using var conn = cf.CreateConnection();
+        var user = await conn.QueryFirstOrDefaultAsync<MeResponse>(
+            "SELECT ... FROM AspNetUsers WHERE Id = @UserId", new { UserId = userId });
+        var roles = await conn.QueryAsync<string>(
+            "SELECT r.Name FROM AspNetRoles r ... WHERE ur.UserId = @UserId", new { UserId = userId });
+        user.Roles = roles.ToList();
+        return user;
+    }
 }
 ```
-- Domain định nghĩa contract (interface).
-- Infrastructure implement contract.
 
-### 4.3 Query repository dùng SqlKata/Dapper, Command repository dùng EF Core
-**Inferred from:** `UserQueryRepository` dùng `QueryFactory` (SqlKata), `UserRepository` dùng `AppDbContext` (EF Core).
-- **CQRS Read side:** Dùng SqlKata + Dapper (hiệu năng cao, đọc nhanh).
-- **CQRS Write side:** Dùng EF Core (change tracking, transaction, identity).
+### 4.4 Repository trả về DTO (không trả về Entity)
+**Inferred from:** `UserReadRepository` trả về `MeResponse?`, `UserDetailResponse?`, `IReadOnlyList<UserListItemDto>`.
+- Read repository trả về DTO từ Application layer.
+- Write repository trả về `int` (số rows affected).
+- Không return Entity từ Domain layer.
 
-### 4.4 Repository phương thức trả về Task, không async void
+### 4.5 Repository phương thức trả về Task, không async void
 **Inferred from:** Tất cả repository methods đều trả về `Task<T>` hoặc `Task`.
 
 ---
@@ -231,6 +249,14 @@ public interface IValueObject;         // Đánh dấu value object
 - Identity entity (`ApplicationUser`) dùng cho authentication.
 - Hai entity này đại diện cùng một concept nhưng disconnected — cần mapping.
 
+### 5.6 IUserContext thay ICurrentUserService
+**Inferred from:** Me branch P1 — `IUserContext` trong `Application/Common/Security/`.
+- `IUserContext` là pure abstraction (không phụ thuộc HttpContext).
+- Có 2 implementations: `HttpUserContext` (HTTP) và `UserContext` (Test/Background).
+- `UserContext.System` dùng cho background jobs.
+- Property `UserId` là `Guid` (type-safe), không còn `string?` như ICurrentUserService.
+- Property `Roles` là `IReadOnlyList<string>` (có sẵn, không cần query DB).
+
 ### 5.6 Domain exception cho business rule violations
 **Inferred from:** `DomainException.cs`, `UserAgeNotValid.cs`.
 ```csharp
@@ -257,33 +283,47 @@ public static Users Create(int age, UserRole role, string name)
 
 ## 6. API Rules
 
-### 6.1 Controller chỉ gọi IMediator
-**Inferred from:** `AuthController.cs`.
+### 6.1 Controller inject IMediator (hoặc Repository cho list đơn giản)
+**Inferred from:** `AuthController.cs`, `UserController.cs` (sau Me branch).
 ```csharp
-[Route("api/auth"), ApiController]
-public class AuthController(IMediator mediator) : ControllerBase
+[Route("api/users"), ApiController]
+public class UserController(IMediator mediator, IUserReadRepository userRepo) : ControllerBase
 {
-    [HttpPost("login")]
-    public async Task<ActionResult<LoginResponse>> Login(LoginCommand command)
+    // CQRS: gọi MediatR
+    [Authorize]
+    [HttpGet("me")]
+    public async Task<IActionResult> Me()
     {
-        var result = await mediator.Send(command);
-        return result.IsSuccess
-            ? Ok(result.Value)
-            : BadRequest(new ApiErrorResponse(result.Error!));
+        var result = await _mediator.Send(new MeQuery());
+        return result.Match(Ok, this.HandleFailure);
+    }
+
+    // List đơn giản: gọi Repository trực tiếp (ngoại lệ)
+    [AllowAnonymous]
+    [HttpGet]
+    public async Task<IActionResult> GetUsers()
+    {
+        var users = await _userRepo.GetAllUsersAsync();
+        return Ok(users);
     }
 }
 ```
-- Controller KHÔNG inject service, repository, hoặc DbContext.
-- Controller CHỈ inject `IMediator`.
+- Controller KHÔNG inject service, DbContext.
+- Controller CHỈ inject `IMediator` + `IUserContext` + có thể inject ReadRepository.
 
-### 6.2 Mọi API response theo pattern Result\<T\>
-**Inferred from:** Tất cả controller actions.
+### 6.2 Mọi API response theo pattern Result\<T\> + HandleFailure
+**Inferred from:** Tất cả controller actions (sau Me branch).
 ```csharp
-if (result.IsSuccess) return Ok(result.Value);
-return BadRequest(new ApiErrorResponse(result.Error!));
+result.Match(Ok, this.HandleFailure);
 ```
-- Success → `Ok(value)` (200).
-- Failure → `BadRequest(apiErrorResponse)` (400).
+- `Result.Match(success, failure)` pattern:
+  - Success → `Ok(value)` (200), `CreatedAtAction(...)` (201) hoặc `NoContent()` (204).
+  - Failure → `HandleFailure` tự chọn status code:
+    - `NotFoundException` → 404
+    - `UnauthorizedException` → 401
+    - `ForbiddenException` → 403
+    - `ValidationException` → 400
+    - Error khác → 500
 - Không dùng try-catch trong controller (ExceptionMiddleware xử lý).
 
 ### 6.3 Route convention: api/{controller}
@@ -718,11 +758,11 @@ if (user != null && !user.EmailConfirmed)
 
 ## 18. Bug Rules (Anti-Patterns cần tránh)
 
-### 18.1 SqlKata dùng sai SQL Compiler
-**Inferred from:** `DependencyInjection.cs:44`.
-```csharp
-var compiler = new SqlServerCompiler();  // ✅ ĐÚNG: DB là SQL Server
-```
+### 18.1 SqlKata đã xóa (Me branch P2)
+**Inferred from:** Me branch P2 — `SqlKata` + `SqlKata.Execution` packages đã gỡ.
+- `UserQueryRepository` (SqlKata) → `UserReadRepository` (Dapper).
+- `QueryFactory` DI registration → xóa.
+- `SqlServerCompiler` → không còn dùng.
 
 ### 18.2 HSTS bật sai môi trường
 **Inferred from:** `SecureHeadersMiddleware.cs:40`.
