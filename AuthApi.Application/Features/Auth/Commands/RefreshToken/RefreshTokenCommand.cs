@@ -1,6 +1,6 @@
 ﻿using AuthApi.Application.Abstractions.Messaging.Command;
 using AuthApi.Application.Common;
-using AuthApi.Application.Features.Auth.DTOs.Auth.RefreshToken;
+using AuthApi.Application.Features.Auth.DTOs.RefreshToken;
 
 namespace AuthApi.Application.Features.Auth.Commands.RefreshToken
 {

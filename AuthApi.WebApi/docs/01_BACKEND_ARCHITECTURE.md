@@ -27,13 +27,11 @@ Backend API cho nền tảng quản lý tài chính cá nhân & du lịch nhóm,
 | JWT Bearer | 10.0.6 | Xác thực access token |
 | MediatR | 12.1.1 | CQRS — commands & queries |
 | FluentValidation | 12.1.1 | Kiểm tra dữ liệu đầu vào |
-| Dapper | 2.1.72 | Micro-ORM — thao tác đọc |
-| SqlKata | 4.0.1 | Query builder — thao tác đọc |
+| Dapper | 2.1.72 | Micro-ORM — thao tác đọc + ghi |
 | Hangfire | 1.8.23 | Xử lý tác vụ nền |
-| StackExchange.Redis | 2.12.14 | Redis client |
+| StackExchange.Redis | 2.12.14 | Redis client (cache, SignalR backplane, Hangfire) |
 | Swashbuckle | 10.1.7 | Swagger UI |
 | SignalR | 10.0.6 | Chat real-time |
-| Mapster | 10.0.7 | Ánh xạ đối tượng (đã khai báo, chưa dùng) |
 | DnsClient | 1.8.0 | Kiểm tra MX record email |
 
 ---
@@ -46,7 +44,7 @@ Dự án kết hợp ba mẫu kiến trúc:
 
 1. **Clean Architecture** (chính) — Phân tách 4 lớp, đảo ngược phụ thuộc. Domain thuần .NET; Application điều phối use case; Infrastructure triển khai các thành phần bên ngoài; WebApi trình bày.
 
-2. **CQRS** (qua MediatR) — Thao tác ghi dùng Commands; Thao tác đọc dùng Queries. Phía ghi dùng EF Core (ORM đầy đủ); phía đọc dùng Dapper/SqlKata (nhẹ, nhanh).
+2. **CQRS** (qua MediatR) — Thao tác ghi dùng Commands; Thao tác đọc dùng Queries. Cả đọc và ghi đều dùng **Dapper** (SqlKata đã xóa ở Me branch P2).
 
 3. **DDD Tactical Patterns** — Entities (`BaseEntity`), Value Objects (`Email`), Aggregate Roots (`IAggregateRoot`), Domain Exceptions (`DomainException`), Domain Services (phương thức factory như `Users.Create()`).
 
@@ -115,16 +113,19 @@ AuthApi.Application/
 │   └── Behavior/
 │       └── ValidationBehavior.cs # Pipeline validation cho MediatR
 ├── Abstractions/
+│   ├── Cache/
+│   │   └── ICacheService.cs               # Redis cache abstraction (MỚI)
 │   └── Interfaces/
 │       ├── Auth/
 │       │   ├── IAuthCookieService.cs
 │       │   ├── IIdentityService.cs
 │       │   └── ITokenService.cs
 │       ├── Email/
-│       │   ├── IEmailChecker.cs      # Kiểm tra MX record
-│       │   └── IEmailService.cs      # Gửi SMTP
+│       │   ├── IEmailChecker.cs            # Kiểm tra MX record
+│       │   └── IEmailService.cs            # Gửi SMTP
 │       └── Repositories/
-│           └── IUserQueryRepository.cs  # Repository phía đọc
+│           ├── IUserReadRepository.cs      # MỚI: Dapper read
+│           └── IUserWriteRepository.cs     # MỚI: Dapper write
 ├── Abstractions/Messaging/
 │   ├── Command/
 │   │   ├── ICommand.cs
@@ -132,6 +133,9 @@ AuthApi.Application/
 │   └── Query/
 │       ├── IQuery.cs
 │       └── IQueryHandler.cs
+├── Common/
+│   └── Security/
+│       └── IUserContext.cs                 # MỚI: thay ICurrentUserService
 └── Features/
     ├── Auth/Commands/
     │   ├── Login/       (LoginCommand, Handler, Validator)
@@ -141,18 +145,22 @@ AuthApi.Application/
     │   ├── SendOTP/     (SendOTPCommand, Handler)
     │   ├── VerifyEmail/ (VerifyEmailCommand, Handler)
     │   └── ResetPassword/ (ResetPassCommand, Handler, Validator)
-    ├── Auth/Queries/
-    │   └── GetUsers/    (GetAllUserQuery, Handler)
-    ├── Auth/DTOs/Auth/
-    │   ├── Login/
-    │   ├── Register/
-    │   ├── Logout/
-    │   ├── RefreshToken/
-    │   ├── Token/
-    │   └── ForgetPassword/
+    ├── Auth/DTOs/
+    │   ├── AuthUserDto.cs                  # SỬA: Role→Roles[]
+    │   └── Login/Register/...
     └── Users/
-        ├── DTOs/UserDto.cs
-        └── Queries/GetUsers/
+        ├── DTOs/
+        │   ├── MeResponse.cs               # MỚI: Roles[]
+        │   ├── UserDetailResponse.cs       # MỚI: admin detail
+        │   └── UserListItemDto.cs          # MỚI: list item
+        ├── Queries/
+        │   ├── Me/MeQuery.cs + Handler     # MỚI: +Redis cache
+        │   ├── GetUserById/Query + Handler # MỚI: admin
+        │   └── GetAllUserQuery.cs          # SỬA: Dapper
+        └── Commands/
+            ├── UpdateUser/Command + Handler + Validator     # MỚI
+            ├── AssignRoles/Command + Handler + Validator    # MỚI
+            └── RemoveRoles/Command + Handler + Validator    # MỚI
 
 AuthApi.Infrastructure/
 ├── Configuration/
@@ -165,23 +173,29 @@ AuthApi.Infrastructure/
 │   └── Seeds/
 │       └── RoleSeeder.cs         # Seed User/Admin/Guest + admin mặc định
 ├── Persistence/
-│   ├── AppDbContext.cs            # DbContext EF Core
-│   ├── Connections/
-│   │   ├── IDbConnectionFactory.cs
-│   │   └── DbConnectionFactory.cs
+│   ├── Dapper/
+│   │   ├── DbConnectionFactory.cs
+│   │   └── Repositories/
+│   │       ├── UserReadRepository.cs   # Dapper read (thay SqlKata)
+│   │       └── UserWriteRepository.cs  # Dapper write (thay EF Core stub)
+│   ├── AppDbContext.cs                  # EF Core (Identity internal use)
 │   ├── Entities/
-│   │   ├── BuildEntities.cs       # Cấu hình Fluent API
-│   │   └── SeedEntitiesData.cs    # Placeholder rỗng
+│   │   ├── BuildEntities.cs             # Cấu hình Fluent API
+│   │   └── SeedEntitiesData.cs          # Placeholder rỗng
 │   └── Repositories/Users/
-│       ├── UserRepository.cs      # Phía ghi (stub)
-│       └── UserQueryRepository.cs # Phía đọc (SqlKata)
+│       ├── UserRepository.cs            # Đã xóa (Me branch P2)
+│       └── UserQueryRepository.cs       # Đã xóa (Me branch P2)
 ├── Services/
 │   ├── Auth/
 │   │   ├── IdentityService.cs     # Điều phối xác thực
+│   │   ├── HttpUserContext.cs     # MỚI: IUserContext (HTTP)
+│   │   ├── UserContext.cs         # MỚI: IUserContext (Test/Background)
 │   │   └── HangfireAuthFilter.cs  # Xác thực dashboard Hangfire
 │   ├── Token/
 │   │   ├── TokenService.cs        # JWT + refresh token
 │   │   └── AuthCookieService.cs   # Đọc/ghi cookie
+│   ├── Cache/
+│   │   └── RedisCacheService.cs   # MỚI: ICacheService (Redis)
 │   └── Email/
 │       ├── EmailService.cs        # SMTP
 │       ├── EmailChecker.cs        # Kiểm tra MX
@@ -194,8 +208,8 @@ AuthApi.WebApi/
 ├── Program.cs                     # Entry point, DI, middleware pipeline
 ├── ApiErrorResponse.cs            # Định dạng response lỗi
 ├── Controllers/
-│   ├── AuthController.cs          # Endpoint auth (chỉ login hoạt động)
-│   └── UserController.cs          # Endpoint user (đã comment hết)
+│   ├── AuthController.cs          # Endpoint auth (login, register, refresh...)
+│   └── UserController.cs          # MỚI: Me, Detail, List, Update, Roles, Lockout
 ├── Middlewares/
 │   ├── ExceptionMiddleware.cs     # Xử lý lỗi toàn cục
 │   ├── CSRFMiddleware.cs          # Kiểm tra CSRF
@@ -359,7 +373,7 @@ app.MapControllers();                            // 10 — route đến controll
   "nameid": "guid-user-id",
   "email": "user@example.com",
   "unique_name": "username",
-  "role": ["User"]
+  "role": ["User", "Admin"]     // ← Multiple roles
 }
 ```
 
@@ -384,7 +398,7 @@ Client                          Server
   │     - CSRF-TOKEN (không HttpOnly)
   │                                │
   │  { accessToken, expired,       │
-  │    userId, email, role }       │
+  │    userId, email, roles }      │  // roles: string[]
   │<──────────────────────────────│
 ```
 
@@ -410,8 +424,13 @@ Client                          Server
 ### Roles & Policies
 - Roles: `User`, `Admin`, `Guest` (từ enum `UserRole`)
 - Được seed khi ứng dụng khởi động
-- Policy-based authorization KHÔNG được dùng (chỉ kiểm tra role qua `[Authorize(Roles = "Admin")]`)
+- **Policy-based authorization** (sau Me branch P3):
+  ```csharp
+  options.AddPolicy("RequireAdmin", policy => policy.RequireRole("Admin"));
+  options.AddPolicy("RequireUser", policy => policy.RequireRole("User"));
+  ```
 - Dashboard Hangfire chỉ cho phép role `Admin`
+- **Breaking change v2:** `Role` (string) → `Roles` (string[]) trong tất cả DTOs
 
 ### Cấu Hình Identity
 - Lockout: 5 lần sai, khóa 10 phút
@@ -434,18 +453,17 @@ Client                          Server
 |-----------|---------------|----------|-------------|-------|
 | `IMediator` | `Mediator` | Scoped | AddApplication | Điều phối CQRS |
 | `IPipelineBehavior<,>` | `ValidationBehavior<,>` | Transient | AddApplication | Pipeline validation MediatR |
-| `AppDbContext` | `AppDbContext` | Scoped | AddInfrastructure | Context EF Core mỗi request |
-| `IDbConnection` | `SqlConnection` | Scoped | AddInfrastructure | Kết nối Dapper mỗi request |
-| `QueryFactory` | `QueryFactory` | Scoped | AddInfrastructure | Query builder SqlKata mỗi request |
-| `IDbConnectionFactory` | `DbConnectionFactory` | Scoped | AddInfrastructure | Factory tạo kết nối Dapper |
-| `IUserRepository` | `UserRepository` | Scoped | AddInfrastructure | Repository phía ghi (domain) |
-| `IUserQueryRepository` | `UserQueryRepository` | Scoped | AddInfrastructure | Repository phía đọc (CQRS) |
+| `IDbConnectionFactory` | `DbConnectionFactory` | Singleton | AddInfrastructure | Factory tạo kết nối Dapper (stateless) |
+| `IUserReadRepository` | `UserReadRepository` | Scoped | AddInfrastructure | Dapper read (thay SqlKata) |
+| `IUserWriteRepository` | `UserWriteRepository` | Scoped | AddInfrastructure | Dapper write (thay EF Core stub) |
+| `IUserContext` | `HttpUserContext` | Scoped | AddInfrastructure | Security context (thay ICurrentUserService) |
+| `ICacheService` | `RedisCacheService` | Singleton | AddInfrastructure | Redis cache với graceful degradation |
 | `ITokenService` | `TokenService` | Scoped | AddInfrastructure | Tạo JWT + refresh token |
 | `IIdentityService` | `IdentityService` | Scoped | AddInfrastructure | Điều phối xác thực |
 | `IAuthCookieService` | `AuthCookieService` | Scoped | AddInfrastructure | Quản lý cookie |
 | `IEmailService` | `EmailService` | Scoped | AddInfrastructure | Gửi email SMTP |
 | `IEmailChecker` | `EmailChecker` | Scoped | AddInfrastructure | Kiểm tra MX record |
-| `IConnectionMultiplexer` | `ConnectionMultiplexer` | Singleton | AddInfrastructure | Kết nối Redis dùng chung |
+| `IConnectionMultiplexer` | `ConnectionMultiplexer` | Singleton | AddInfrastructure | Redis connection dùng chung |
 | `IDistributedCache` | (Redis) | Singleton | AddInfrastructure | Cache Redis |
 | Hangfire Server | — | Singleton | AddInfrastructure | Xử lý tác vụ nền |
 | `IHttpContextAccessor` | `HttpContextAccessor` | Singleton | Program.cs | Truy cập HttpContext trong service |

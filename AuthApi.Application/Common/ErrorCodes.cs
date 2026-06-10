@@ -17,5 +17,12 @@ namespace AuthApi.Application.Common
         public const string ValidationError = "VALIDATION_ERROR";
         public const string GeneralError = "GENERAL_ERROR";
         public const string InternalError = "INTERNAL_ERROR";
+        public const string Unauthorized = "UNAUTHORIZED";
+        public const string Forbidden = "FORBIDDEN";
+        public const string NotFound = "NOT_FOUND";
+        public const string UserUpdateFailed = "USER_UPDATE_FAILED";
+        public const string RoleAssignmentFailed = "ROLE_ASSIGNMENT_FAILED";
+        public const string RoleRemovalFailed = "ROLE_REMOVAL_FAILED";
+        public const string RoleNotFound = "ROLE_NOT_FOUND";
     }
 }

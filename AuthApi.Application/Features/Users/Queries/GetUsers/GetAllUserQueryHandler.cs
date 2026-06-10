@@ -4,13 +4,11 @@ using AuthApi.Application.Features.Users.DTOs;
 
 namespace AuthApi.Application.Features.Users.Queries.GetUsers
 {
-    public class GetAllUserQueryHandler(IUserQueryRepository repoUserQuery) : IQueryHandler<GetAllUserQuery, List<UserDto>>
+    public class GetAllUserQueryHandler(IUserReadRepository _userRepo) : IQueryHandler<GetAllUserQuery, List<UserListItemDto>>
     {
-        public async Task<List<UserDto>> Handle(GetAllUserQuery req, CancellationToken cancellationToken)
+        public async Task<List<UserListItemDto>> Handle(GetAllUserQuery req, CancellationToken cancellationToken)
         {
-            var users = await repoUserQuery.GetAllUserAsync(cancellationToken);
-
-            return users;
+            return await _userRepo.GetAllUsersAsync(cancellationToken);
         }
     }
 }

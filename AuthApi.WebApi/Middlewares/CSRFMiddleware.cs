@@ -4,6 +4,8 @@ namespace AuthApi.WebApi.Middlewares
 {
     public class CSRFMiddleware(RequestDelegate _next)
     {
+        private string apiAuth { get; } = "/api/auth";
+
         private readonly string[] SafeMethods = {
             HttpMethods.Get,
             HttpMethods.Head,
@@ -27,7 +29,6 @@ namespace AuthApi.WebApi.Middlewares
                 return;
             }
 
-            string apiAuth = "/api/auth";
             var path = _context.Request.Path.Value?.ToLower();
 
             if (!string.IsNullOrEmpty(path)

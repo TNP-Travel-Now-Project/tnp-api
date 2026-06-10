@@ -26,11 +26,9 @@ Backend API cho nền tảng quản lý du lịch & tài chính cá nhân. Ngư�
 | JWT Bearer | 10.0.6 | Xác thực access token |
 | MediatR | 12.1.1 | CQRS (commands/queries) |
 | FluentValidation | 12.1.1 | Kiểm tra dữ liệu |
-| Dapper | 2.1.72 | Micro-ORM (đọc dữ liệu, CQRS read side) |
-| SqlKata | 4.0.1 | Query builder cho đọc dữ liệu |
-| Mapster | 10.0.7 | Ánh xạ đối tượng |
+| Dapper | 2.1.72 | Micro-ORM (đọc + ghi, CQRS cả 2 side) |
 | Hangfire | 1.8.23 | Xử lý tác vụ nền |
-| StackExchange.Redis | 2.12.14 | Redis client |
+| StackExchange.Redis | 2.12.14 | Redis client (cache, SignalR backplane, Hangfire storage) |
 | Swashbuckle | 10.1.7 | Swagger/OpenAPI |
 | SignalR | 10.0.6 | Chat real-time (Redis backplane) |
 | DnsClient | 1.8.0 | Kiểm tra MX record email |
@@ -41,7 +39,7 @@ Backend API cho nền tảng quản lý du lịch & tài chính cá nhân. Ngư�
 
 ### Kiểu Kiến Trúc: **Clean Architecture (DDD-flavored Hybrid)**
 
-Dự án theo **Clean Architecture** với các mẫu **Domain-Driven Design** (entities, value objects, aggregates, domain exceptions). Kết hợp **CQRS** trong Application layer qua MediatR — commands cho ghi, queries cho đọc. Phía đọc dùng Dapper/SqlKata cho hiệu năng, phía ghi dùng EF Core/Identity.
+Dự án theo **Clean Architecture** với các mẫu **Domain-Driven Design** (entities, value objects, aggregates, domain exceptions). Kết hợp **CQRS** trong Application layer qua MediatR — commands cho ghi, queries cho đọc. Cả đọc và ghi đều dùng **Dapper** (SQL thuần, parameterized). Cache dùng **Redis** qua `ICacheService` với TTL 5 phút và graceful degradation.
 
 **Tại sao chọn kiến trúc này:**
 - Domain layer thuần .NET, không phụ thuộc bên ngoài — business rules dễ kiểm thử và cô lập
@@ -55,7 +53,7 @@ Dự án theo **Clean Architecture** với các mẫu **Domain-Driven Design** (
 |---------|----------|
 | `AuthApi.Domain` | Domain cốt lõi: entities, value objects, enums, interfaces (thuần .NET) |
 | `AuthApi.Application` | Use cases: CQRS commands/queries, DTOs, validation, pipeline behaviors |
-| `AuthApi.Infrastructure` | Triển khai: EF Core DbContext, Identity, Repositories, Services (Redis, Hangfire, Email, JWT) |
+| `AuthApi.Infrastructure` | Triển khai: Dapper Repositories, Identity, Services (Redis, Hangfire, Email, JWT, Cache) |
 | `AuthApi.WebApi` | Presentation: Controllers, Middleware, Program.cs, Cấu hình |
 
 ```mermaid
@@ -253,9 +251,15 @@ sequenceDiagram
   "nameid": "<user-id>",
   "email": "<user-email>",
   "unique_name": "<user-name>",
-  "role": ["User", "Admin"]
+  "role": ["User", "Admin"]     // ← Multiple roles (breaking change: Role→Roles[])
 }
 ```
+
+**⚠️ Breaking change v2:** `Role` (string) → `Roles` (string[]).  
+User có thể có nhiều role (vd: vừa "User" vừa "Admin"). Tất cả DTOs đã cập nhật:
+- `AuthUserDto.role` → `AuthUserDto.roles`
+- `LoginResponse.role` → `LoginResponse.roles`
+- `MeResponse.role` → `MeResponse.roles`
 
 ### Token Service (TokenService)
 - `GenerateTokensAsync`: tạo JWT access token + refresh token ngẫu nhiên 64-byte (lưu DB + set HttpOnly cookie) + set `CSRF-TOKEN` cookie
@@ -267,6 +271,26 @@ sequenceDiagram
 - Được seed khi khởi động qua `RoleSeeder`
 - Tài khoản admin mặc định: `nguyenthanhtuankrp1@gmail.com` / `Admin@123`
 - Dashboard Hangfire chỉ cho phép role `Admin`
+
+### Policy-Based Authorization (sau Me branch)
+Thay vì check role thủ công, dùng policy tập trung:
+
+```csharp
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("RequireAdmin", policy =>
+        policy.RequireRole("Admin"));
+    options.AddPolicy("RequireUser", policy =>
+        policy.RequireRole("User"));
+});
+```
+
+Sử dụng trong controller:
+```csharp
+[Authorize(Policy = "RequireAdmin")]   // Chỉ Admin
+[Authorize]                             // User đã login
+[AllowAnonymous]                        // Public
+```
 
 ### Chính Sách Mật Khẩu
 - Yêu cầu chữ số, chữ hoa, độ dài ≥ 6
@@ -286,7 +310,7 @@ Body: { email, password, rememberMe }
 6. Lưu refresh token trong bảng RefreshToken
 7. Đặt cookie refreshToken (HttpOnly, Secure, SameSite=None)
 8. Đặt cookie CSRF-TOKEN (non-HttpOnly)
-9. Trả về LoginResponse { accessToken, expired, userId, email, role }
+9. Trả về LoginResponse { accessToken, expired, userId, email, roles }  // roles: string[]
 ```
 
 ### Luồng Gọi API Sau Đăng Nhập
@@ -327,12 +351,11 @@ services.AddInfrastructure(config, connectionString) qua extension static
 
 | Interface | Implementation | Lifetime | Lý do |
 |-----------|---------------|----------|-------|
-| `IDbConnection` | `SqlConnection` | Scoped | Kết nối Dapper mỗi request |
-| `QueryFactory` | `QueryFactory` (SqlKata) | Scoped | Query builder phía đọc mỗi request |
-| `IDbConnectionFactory` | `DbConnectionFactory` | Scoped | Factory tạo kết nối Dapper |
-| `AppDbContext` | `AppDbContext` | Scoped | EF Core mặc định |
-| `IUserRepository` | `UserRepository` | Scoped | Domain repository (phía ghi) |
-| `IUserQueryRepository` | `UserQueryRepository` | Scoped | Query repository (phía đọc qua SqlKata) |
+| `IDbConnectionFactory` | `DbConnectionFactory` | Singleton | Factory tạo kết nối Dapper (stateless) |
+| `IUserReadRepository` | `UserReadRepository` | Scoped | Dapper read repository (thay SqlKata) |
+| `IUserWriteRepository` | `UserWriteRepository` | Scoped | Dapper write repository (thay EF Core stub) |
+| `IUserContext` | `HttpUserContext` | Scoped | Security context từ HTTP request (thay ICurrentUserService) |
+| `ICacheService` | `RedisCacheService` | Singleton | Redis cache với graceful degradation |
 | `ITokenService` | `TokenService` | Scoped | Quản lý JWT + refresh token |
 | `IIdentityService` | `IdentityService` | Scoped | Điều phối xác thực (login/register/logout) |
 | `IAuthCookieService` | `AuthCookieService` | Scoped | Đọc/ghi cookie qua HttpContext |
@@ -470,14 +493,31 @@ erDiagram
 
 ### 8.2 Module Người Dùng
 
-**Mục đích**: Truy vấn dữ liệu người dùng (phía đọc).
+**Mục đích**: Truy vấn + quản lý người dùng (CQRS đầy đủ: read + write).
 
-**Các file:**
-- `AuthApi.WebApi/Controllers/UserController.cs` (hiện đã comment hết)
-- `AuthApi.Application/Features/Users/Queries/GetUsers/`
-- `AuthApi.Infrastructure/Persistence/Repositories/Users/UserQueryRepository.cs`
+**Các file (sau Me branch — 4 patches):**
+- `AuthApi.WebApi/Controllers/UserController.cs` (đầy đủ: Me, Detail, List, Update, Roles, Lockout)
+- `AuthApi.Application/Features/Users/Queries/Me/`
+- `AuthApi.Application/Features/Users/Queries/GetUserById/`
+- `AuthApi.Application/Features/Users/Commands/UpdateUser/`
+- `AuthApi.Application/Features/Users/Commands/AssignRoles/`
+- `AuthApi.Application/Features/Users/Commands/RemoveRoles/`
+- `AuthApi.Infrastructure/Persistence/Dapper/Repositories/UserReadRepository.cs`
+- `AuthApi.Infrastructure/Persistence/Dapper/Repositories/UserWriteRepository.cs`
 
-**Flow:** Dùng SqlKata query builder trên bảng `AspNetUsers` → trả về `List<UserDto>`.
+**Endpoints:**
+
+| Method | Route | Auth | Mô tả |
+|--------|-------|------|-------|
+| GET | `/api/users/me` | [Authorize] | Profile user (có Redis cache, TTL 5 phút) |
+| GET | `/api/users/{id}` | RequireAdmin | Detail user (lockout info) |
+| GET | `/api/users` | AllowAnonymous | List tất cả users |
+| PUT | `/api/users/{id}` | RequireAdmin | Update thông tin |
+| POST | `/api/users/{id}/roles` | RequireAdmin | Gán roles |
+| DELETE | `/api/users/{id}/roles` | RequireAdmin | Xóa roles |
+| DELETE | `/api/users/{id}` | RequireAdmin | Lockout user (soft) |
+
+**Flow:** Dapper (2 queries: user info + roles batch). Cache Redis cho `/me` với graceful degradation.
 
 ### 8.3 Module Du Lịch (Đã Lên Kế Hoạch)
 
@@ -633,7 +673,7 @@ Bound từ section `AppSettings`: `FrontendUrl`, `JwtKey`, `JwtIssuer`, `JwtAudi
 | **HTTPS** | 8 | Ép buộc qua `UseHttpsRedirection`. JWT yêu cầu HTTPS. CSP upgrade-insecure-requests ở prod. |
 | **JWT** | 7 | HMAC-SHA256 (đối xứng — kém an toàn hơn RSA/ECDSA). Khóa lưu trong config/User Secrets. Không có JWKS endpoint. 15 phút expiry tốt. |
 | **Password Hash** | 9 | ASP.NET Core Identity dùng PBKDF2. Lockout sau 5 lần. |
-| **SQL Injection** | 8 | EF Core parameterizes queries. Dapper/SqlKata parameterized mặc định. Không có raw SQL. |
+| **SQL Injection** | 8 | EF Core parameterizes queries. Dapper parameterized mặc định. Không có raw SQL. |
 | **XSS** | 8 | CSP headers với nonce ở production. X-Content-Type-Options: nosniff. |
 | **CSRF** | 7 | Cookie-based CSRF token. Auth endpoints được loại trừ. CSRF token là GUID đơn giản (không phải HMAC mật mã). |
 | **Security Headers** | 8 | CSP, HSTS, X-Frame-Options (DENY), Referrer-Policy. CSP có placeholder domain cần thay. |
@@ -696,7 +736,7 @@ Bound từ section `AppSettings`: `FrontendUrl`, `JwtKey`, `JwtIssuer`, `JwtAudi
 1. **Mọi service method đều trả về `Result<T>`** — không throw exception cho lỗi nghiệp vụ dự kiến. Exception chỉ dùng cho lỗi thực sự bất ngờ (ExceptionMiddleware bắt).
 2. **Validation luôn dùng FluentValidation** — kiểm tra qua MediatR pipeline behavior. Controller KHÔNG tự validate.
 3. **Controller không gọi DbContext hoặc service trực tiếp** — chỉ gọi `IMediator.Send()` hoặc inject query repository trực tiếp (ngoại lệ: UserController inject `IUserQueryRepository`).
-4. **CQRS split**: Ghi đi qua Command → Handler → Service pipeline. Đọc có thể đi qua Query → Handler → QueryRepository (Dapper/SqlKata).
+4. **CQRS split**: Ghi đi qua Command → Handler → WriteRepository (Dapper). Đọc có thể đi qua Query → Handler → ReadRepository (Dapper).
 5. **Commands là sealed records** — bất biến, thường với `ICommand<Result<TResponse>>`.
 6. **Handlers mỏng** — ủy quyền cho service ngay lập tức (handler 1 dòng).
 7. **Primary constructors** được dùng khắp nơi (C# 12).
@@ -713,7 +753,7 @@ Bound từ section `AppSettings`: `FrontendUrl`, `JwtKey`, `JwtIssuer`, `JwtAudi
 18. **Mapster** được khai báo trong dependencies nhưng KHÔNG được dùng. Project dùng mapping thủ công.
 19. **Domain entity `Users`** (trong Domain project) tách biệt với `ApplicationUser` (trong Infrastructure). `Users` là DDD entity còn `ApplicationUser` là Identity framework entity. Cùng một concept nhưng đang disconnected.
 20. **Password validation rules bị duplicate** trong cả `LoginCommandValidator` và `RegisterCommandValidator`.
-21. ~~**Connection strings** cho EF Core (Npgsql) và Dapper/SqlKata (`SqlConnection` với `SqlServerCompiler`) dùng CHUNG key `Default` nhưng provider khác nhau.~~ — đã đồng bộ: cả EF Core và SqlKata/Dapper đều dùng SQL Server qua `Microsoft.Data.SqlClient`.
+21. ~~**Connection strings** cho EF Core (Npgsql) và Dapper/SqlKata (`SqlConnection` với `SqlServerCompiler`) dùng CHUNG key `Default` nhưng provider khác nhau.~~ — **SqlKata đã được xóa.** Dapper dùng `IDbConnectionFactory` với SQL Server qua `Microsoft.Data.SqlClient`.
 
 ---
 
@@ -794,7 +834,7 @@ public interface ICategoryService
 #### 7. Infrastructure Service Implementation
 **File**: `AuthApi.Infrastructure/Services/Categories/CategoryService.cs`
 - Implement interface
-- Dùng DbContext hoặc Dapper/SqlKata
+- Dùng Dapper (qua `IDbConnectionFactory`)
 - Đăng ký trong `AddInfrastructure()`
 
 #### 8. Infrastructure Repository Implementation
@@ -846,17 +886,17 @@ Thêm `services.AddScoped<ICategoryService, CategoryService>()` trong `AuthApi.I
 
 | Vấn đề | Vị trí | Ảnh hưởng | Đề xuất |
 |--------|--------|-----------|---------|
-| ~~**SqlKata dùng SqlServerCompiler nhưng DB là PostgreSQL**~~ | — | — | Đã chuyển sang SQL Server, `SqlServerCompiler` khớp với DB. |
+| ~~**SqlKata dùng SqlServerCompiler nhưng DB là PostgreSQL**~~ | — | — | Đã chuyển sang SQL Server. **SqlKata đã xóa (Me branch P2).** |
 | **HSTS bật ở dev, tắt ở prod** | `SecureHeadersMiddleware.cs:40` | Prod thiếu HSTS | Sửa thành `if (!isdev)` |
-| **Controller trống (endpoint đã comment hết)** | `AuthController.cs` | Chỉ 1 endpoint login hoạt động | Mở lại hoặc xóa code chết |
-| **UserController hoàn toàn bị comment** | `UserController.cs` | Không có endpoint user | Mở lại hoặc implement lại |
+| ~~**UserController hoàn toàn bị comment**~~ | `UserController.cs` | — | **Đã implement lại (Me branch P3-P4):** Me, Detail, List, Update, Roles, Lockout |
 
 ### High
 
 | Vấn đề | Vị trí | Ảnh hưởng | Đề xuất |
 |--------|--------|-----------|---------|
 | **Factory classes rỗng** | `UsersFactory.cs`, `SeedEntitiesData.cs` | Code chết gây nhầm lẫn | Xóa hoặc implement |
-| **UserRepository code stub** | `UserRepository.cs` | `AddAsync` và `GetUserByIdAsync` trả data giả | Implement đúng hoặc xóa |
+| ~~**UserRepository code stub**~~ | — | — | **Đã xóa (Me branch P2).** Thay bằng `UserWriteRepository` (Dapper) |
+| ~~**UserQueryRepository (SqlKata)**~~ | — | — | **Đã xóa (Me branch P2).** Thay bằng `UserReadRepository` (Dapper) |
 | **Domain entity `Users` disconnected với Identity `ApplicationUser`** | Domain vs Infrastructure | Hai đại diện cho cùng concept → mất đồng bộ | Map giữa chúng hoặc merge |
 | **Validation đăng ký từ hai assembly** | Application + Infrastructure DI | Trùng lặp đăng ký | Bỏ một |
 | **Password rules bị duplicate** | `LoginCommandValidator` + `RegisterCommandValidator` | Vi phạm DRY | Tách shared validator base |
@@ -869,9 +909,10 @@ Thêm `services.AddScoped<ICategoryService, CategoryService>()` trong `AuthApi.I
 | **Hardcoded admin email/password** | `RoleSeeder.cs` | Rủi ro bảo mật trong production | Dùng config/biến môi trường |
 | **Không rate limiting** trên auth endpoints | — | Lỗ hổng brute force | Thêm rate limiting middleware |
 | **Không API versioning** | — | Breaking changes khó quản lý | Thêm `ApiVersion` attributes |
-| **Không logging (Serilog khai báo nhưng chưa cấu hình)** | `.csproj` không có Serilog package | Không có structured logging | Thêm Serilog sink |
+| **Mapster không dùng** | `.csproj` khai báo Mapster | Dependency không cần thiết | Xóa hoặc bắt đầu dùng |
 | **RefreshToken không có FK đến AspNetUsers** | Migration | Token mồ côi | Thêm FK + cascade delete |
 | **Wallet entity sai namespace** | `Infrastructure.Persistence.Entities` | Phải ở `Domain.Entities` | Di chuyển |
+| ~~**Không logging (Serilog khai báo nhưng chưa cấu hình)**~~ | — | — | **Đã cấu hình (CICD branch P5):** Serilog + Seq + file sink |
 | **Mapster không dùng** | `.csproj` khai báo Mapster | Dependency không cần thiết | Xóa hoặc bắt đầu dùng |
 
 ### Low
@@ -899,7 +940,7 @@ Bên dưới là tài liệu tham khảo kỹ thuật cô đọng (~1400 từ) c
 - **Tên**: Travel Now Platform (TNP) API
 - **Solution**: AuthApi.slnx (4 projects)
 - **Target**: .NET 10.0
-- **Database**: SQL Server (Microsoft.EntityFrameworkCore.SqlServer) + Redis
+- **Database**: SQL Server (Microsoft.Data.SqlClient) + Redis
 - **Auth**: JWT Bearer (HMAC-SHA256, 15 phút) + Refresh Token (30 ngày, cookie) + CSRF Token
 
 ## Kiến Trúc
@@ -911,9 +952,11 @@ Bên dưới là tài liệu tham khảo kỹ thuật cô đọng (~1400 từ) c
 
 ## Công Nghệ Chính
 - ASP.NET Core Identity (Guid PK, custom ApplicationUser FirstName/LastName/DOB)
-- Entity Framework Core 10 + Microsoft.EntityFrameworkCore.SqlServer (phía ghi)
-- Dapper + SqlKata (phía đọc) — SqlKata dùng SqlServerCompiler khớp với SQL Server DB
+- **Dapper** (cả đọc và ghi) — **SqlKata đã xóa** (Me branch P2)
 - MediatR 12 (CQRS), FluentValidation 12 (pipeline validation)
+- Redis cache + ICacheService với graceful degradation
+- Policy-based Authorization: `RequireAdmin`, `RequireUser`
+- IUserContext thay ICurrentUserService (pure abstraction, testable)
 - Hangfire (tác vụ nền: email, cleanup, định kỳ)
 - Redis (cache, SignalR backplane, Hangfire storage, OTP storage)
 - SignalR (kế hoạch cho chat real-time)
@@ -939,14 +982,13 @@ Application/
   Common/Behavior/ValidationBehavior.cs
 
 Infrastructure/
-  Services/{Module}/{Name}Service.cs     → Implement Application interfaces
-  Persistence/AppDbContext.cs             → EF Core DbContext
-  Persistence/Repositories/{Entity}/{Name}Repository.cs
-  Persistence/Entities/BuildEntities.cs   → Fluent API config
-  Identities/ApplicationUser.cs           → IdentityUser<Guid> subclass
-  Identities/RefreshToken.cs              → Custom table
-  Identities/Seeds/RoleSeeder.cs          → Seed khi khởi động
-  Common/AppSettings.cs                   → Options pattern
+  Services/{Module}/{Name}Service.cs           → Implement Application interfaces
+  Persistence/Dapper/Repositories/{Name}Repository.cs  → Dapper repos (Read + Write)
+  Persistence/AppDbContext.cs                    → EF Core DbContext (Identity only)
+  Identities/ApplicationUser.cs                  → IdentityUser<Guid> subclass
+  Identities/RefreshToken.cs                     → Custom table
+  Identities/Seeds/RoleSeeder.cs                 → Seed khi khởi động
+  Common/AppSettings.cs                          → Options pattern
 
 WebApi/
   Controllers/{Name}Controller.cs
@@ -997,23 +1039,19 @@ WebApi/
 - CSP có placeholder domains cần thay
 
 ## Thêm Feature Mới (Checklist)
-1. Domain Entity (Domain/Entities/)
-2. Domain Repository Interface (Domain/Interfaces/)
-3. Command/Query (Application/Features/{Module}/Commands|Queries/{Action}/)
-4. FluentValidation Validator (cùng thư mục với Command)
-5. DTO (Application/Features/{Module}/DTOs/)
-6. Service Interface (Application/Abstractions/Interfaces/)
-7. Service Implementation (Infrastructure/Services/)
-8. Repository Implementation (Infrastructure/Persistence/Repositories/)
-9. Controller (WebApi/Controllers/)
-10. DI Registration (trong AddInfrastructure extension)
-11. EF Config + Migration
+1. DTO (Application/Features/{Module}/DTOs/)
+2. Query/Command + Handler + Validator (Application/Features/{Module}/Queries|Commands/{Action}/)
+3. Interface Repository (Application/Abstractions/Interfaces/Repositories/)
+4. Implementation Repository (Infrastructure/Persistence/Dapper/Repositories/)
+5. DI Registration (DependencyInjection.cs)
+6. Controller (WebApi/Controllers/)
+7. `dotnet build` + `dotnet test`
 
 ## Bug Critical Đã Biết
-1. ~~SqlKata dùng SqlServerCompiler nhưng database là PostgreSQL~~ → đã chuyển sang SQL Server, không còn bug này.
+1. ~~SqlKata dùng SqlServerCompiler nhưng database là PostgreSQL~~ → **SqlKata đã xóa, Dapper thuần.**
 2. HSTS chỉ bật ở dev (sai condition trong SecureHeadersMiddleware)
-3. AuthController chỉ còn login endpoint hoạt động — tất cả khác bị comment
-4. UserRepository trả stub, không phải data thật
+3. ~~UserController hoàn toàn bị comment~~ → **Đã implement lại (Me, Detail, List, Update, Roles, Lockout).**
+4. ~~UserRepository trả stub~~ → **Đã xóa, thay bằng UserWriteRepository + UserReadRepository (Dapper).**
 5. Validation đăng ký từ cả Application và Infrastructure assemblies (duplicate)
 
 ## Coding Style

@@ -7,12 +7,12 @@ using AuthApi.Application.Features.Auth.Commands.Logout;
 using AuthApi.Application.Features.Auth.Commands.RefreshToken;
 using AuthApi.Application.Features.Auth.Commands.Register;
 using AuthApi.Application.Features.Auth.Commands.ResetPassword;
-using AuthApi.Application.Features.Auth.DTOs.Auth;
-using AuthApi.Application.Features.Auth.DTOs.Auth.ForgetPassword;
-using AuthApi.Application.Features.Auth.DTOs.Auth.Login;
-using AuthApi.Application.Features.Auth.DTOs.Auth.Logout;
-using AuthApi.Application.Features.Auth.DTOs.Auth.RefreshToken;
-using AuthApi.Application.Features.Auth.DTOs.Auth.Register;
+using AuthApi.Application.Features.Auth.DTOs;
+using AuthApi.Application.Features.Auth.DTOs.ForgetPassword;
+using AuthApi.Application.Features.Auth.DTOs.Login;
+using AuthApi.Application.Features.Auth.DTOs.Logout;
+using AuthApi.Application.Features.Auth.DTOs.RefreshToken;
+using AuthApi.Application.Features.Auth.DTOs.Register;
 using AuthApi.Infrastructure.Common;
 using AuthApi.Infrastructure.Identities;
 using AuthApi.Infrastructure.Services.Email;
@@ -61,14 +61,13 @@ namespace AuthApi.Infrastructure.Services.Auth
             await _userManager.ResetAccessFailedCountAsync(user);
 
             var roles = await _userManager.GetRolesAsync(user);
-            string roleName = string.Join(", ", roles);
 
             var userDto = new AuthUserDto
             {
                 Id = user.Id,
                 Email = user.Email ?? string.Empty,
                 UserName = user.UserName!,
-                Role = roleName
+                Roles = [.. roles]
             };
 
             var token = await _tokenService.GenerateTokensAsync(userDto, roles);
@@ -80,14 +79,14 @@ namespace AuthApi.Infrastructure.Services.Auth
                     expired: token.AccessTokenExpiresAt,
                     userId: user.Id,
                     email: user.Email!,
-                    role: roleName)
+                    roles: [.. roles])
             );
         }
 
         public async Task<Result<LogoutResponse>> LogoutAsync(LogoutCommand request)
         {
             await _tokenService.RevokeRefreshTokenAsync();
-            _tokenHandler.ClearTokens(); 
+            _tokenHandler.ClearTokens();
 
             return Result<LogoutResponse>.Success(
                 new LogoutResponse(Message: "Logout successful"));

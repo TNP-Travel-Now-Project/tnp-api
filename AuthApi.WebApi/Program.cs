@@ -4,9 +4,10 @@ using AuthApi.Infrastructure.Configuration;
 using AuthApi.Infrastructure.Identities;
 using AuthApi.Infrastructure.Identities.Seeds;
 using AuthApi.Infrastructure.Services.Auth;
+using AuthApi.Infrastructure.Services.ConvertType;
 using AuthApi.WebApi.Middlewares;
+using Dapper;
 using Hangfire;
-using Humanizer;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.CookiePolicy;
 using Microsoft.AspNetCore.Identity;
@@ -60,7 +61,7 @@ namespace AuthApi.WebApi
             });
             #endregion
 
-            #region config JWT
+            #region Config JWT
             var jwtSettings = builder.Configuration.GetSection("AppSettings");
             var key = Encoding.UTF8.GetBytes(jwtSettings["JwtKey"]!);
 
@@ -132,6 +133,21 @@ namespace AuthApi.WebApi
             });
             #endregion
 
+            #region config Authorization Policies
+            builder.Services.AddAuthorization(options =>
+            {
+                options.AddPolicy("RequireAdmin", policy =>
+                    policy.RequireRole("Admin"));
+
+                options.AddPolicy("RequireUser", policy =>
+                    policy.RequireRole("User"));
+
+                options.AddPolicy("RequireAdminOrUser", policy =>
+                    policy.RequireAssertion(ctx =>
+                        ctx.User.IsInRole("Admin") || ctx.User.IsInRole("User")));
+            });
+            #endregion
+
             #region Setup CookiePolicyOptions
             builder.Services.Configure<CookiePolicyOptions>(options =>
             {
@@ -184,6 +200,10 @@ namespace AuthApi.WebApi
             });
             #endregion
 
+            #region Implement Dapper Convert from DateTime to DateOnly
+            SqlMapper.AddTypeHandler(new TypeSafeDapperDateOnly());
+            #endregion
+
             var app = builder.Build();
 
             #region Seeds role
@@ -213,7 +233,7 @@ namespace AuthApi.WebApi
 
             app.UseCors("AllowNextJS");
 
-            app.UseHttpsRedirection();   
+            app.UseHttpsRedirection();
 
             app.UseMiddleware<SecureHeadersMiddleware>();
 

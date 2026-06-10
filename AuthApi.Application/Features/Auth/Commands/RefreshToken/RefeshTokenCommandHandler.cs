@@ -1,6 +1,6 @@
 ﻿using AuthApi.Application.Abstractions.Interfaces.Auth;
 using AuthApi.Application.Common;
-using AuthApi.Application.Features.Auth.DTOs.Auth.RefreshToken;
+using AuthApi.Application.Features.Auth.DTOs.RefreshToken;
 using MediatR;
 
 namespace AuthApi.Application.Features.Auth.Commands.RefreshToken
