@@ -13,7 +13,7 @@ namespace AuthApi.Infrastructure.Persistence.Connection
             _connectionString = configuration.GetConnectionString("Default")!;
         }
 
-        /// <summary>Dùng cho tests, truyền connection string trực tiếp.</summary>
+        /// Dùng cho test, truyền connection string trực tiếp.
         public DbConnectionFactory(string connectionString)
         {
             _connectionString = connectionString;

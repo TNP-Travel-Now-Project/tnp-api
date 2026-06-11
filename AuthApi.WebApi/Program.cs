@@ -181,11 +181,9 @@ namespace AuthApi.WebApi
             #region config Authorization Policies
             builder.Services.AddAuthorization(options =>
             {
-                options.AddPolicy("RequireAdmin", policy =>
-                    policy.RequireRole("Admin"));
+                options.AddPolicy("RequireAdmin", policy => policy.RequireRole("Admin"));
 
-                options.AddPolicy("RequireUser", policy =>
-                    policy.RequireRole("User"));
+                options.AddPolicy("RequireUser", policy => policy.RequireRole("User"));
 
                 options.AddPolicy("RequireAdminOrUser", policy =>
                     policy.RequireAssertion(ctx =>

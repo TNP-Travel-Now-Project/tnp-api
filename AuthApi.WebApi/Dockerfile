@@ -8,7 +8,7 @@ COPY ["AuthApi.Infrastructure/AuthApi.Infrastructure.csproj", "AuthApi.Infrastru
 RUN dotnet restore "AuthApi.WebApi/AuthApi.WebApi.csproj"
 
 COPY . .
-RUN dotnet publish "AuthApi.WebApi/AuthApi.WebApi.csproj" -c Release -o /app
+RUN dotnet publish "AuthApi.WebApi/AuthApi.WebApi.csproj" -c Release -o /app --no-restore
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
 WORKDIR /app
