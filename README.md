@@ -85,7 +85,7 @@ Tất cả docs nằm trong `AuthApi.WebApi/docs/`:
 
 Xem chi tiết tại [03_RULES.md](AuthApi.WebApi/docs/03_RULES.md) và [04_AI_CONTEXT.md](AuthApi.WebApi/docs/04_AI_CONTEXT.md).
 
-## Thêm Feature Mới (13 bước)
+## Flow thêm Feature Mới (13 bước)
 
 ```
 1. Domain Entity          → Domain/Entities/{Entity}.cs

@@ -60,5 +60,5 @@ Git Push / PR
 
 ## 🔗 Liên Kết Tài Liệu Gốc
 
-- [CHANGELOG_FLOW.md](../CHANGELOG_FLOW.md) — Nhật ký thay đổi toàn bộ dự án
-- [DOCKER_TUTORIAL.md](../DOCKER_TUTORIAL.md) — Tutorial Docker chi tiết từng dòng code
+- [DOCKER_TUTORIAL.md](./DOCKER_TUTORIAL.md) — Tutorial Docker chi tiết từng dòng code
+- [ME_BRANCH_RESULT.md](../../changelogs/ME_BRANCH_RESULT.md) — Nhật ký thay đổi toàn bộ dự án
