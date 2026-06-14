@@ -8,7 +8,7 @@
   </PropertyGroup>
 
 	<ItemGroup>
-		<AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo	">
+		<AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
 			<_Parameter1>AuthApi.IntegrationTests</_Parameter1>
 		</AssemblyAttribute>
 	</ItemGroup>
