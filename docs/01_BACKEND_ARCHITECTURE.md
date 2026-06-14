@@ -218,8 +218,9 @@ AuthApi.WebApi/
 │   └── BUSINESS_DOMAIN.md         # Yêu cầu nghiệp vụ (tiếng Việt)
 ├── appsettings.json
 ├── appsettings.Development.json
+├── appsettings.Docker.json          # Docker environment (Cookie.Secure=false, ConnectionStrings fallback)
 ├── appsettings.Production.json
-└── Properties/launchSettings.json
+└── Properties/launchSettings.json   # VS profiles: http/https (dotnet run) + Container (F5 Docker)
 ```
 
 ---
@@ -581,14 +582,30 @@ app.MapControllers();
 app.Run();
 ```
 
-### Nguồn Cấu Hình
-| Nguồn | Mục đích |
-|-------|----------|
-| `appsettings.json` | Config cơ sở (logging, AllowedHosts) |
-| `appsettings.Development.json` | Ghi đè cho dev (Frontend:Url = localhost:3001) |
-| `appsettings.Production.json` | Ghi đè cho prod (Frontend:Url placeholder) |
-| User Secrets (dev) | Giá trị nhạy cảm: connection strings, JWT keys, email credentials |
-| Biến môi trường | Cấu hình production |
+### Nguồn Cấu Hình (Thứ tự ưu tiên từ thấp đến cao)
+
+| Nguồn | Mục đích | Dùng khi |
+|-------|----------|----------|
+| `appsettings.json` | Config cơ sở (logging, AllowedHosts) | Mọi môi trường |
+| `appsettings.{env}.json` | Ghi đè theo môi trường (Development/Docker/Production) | Tùy `ASPNETCORE_ENVIRONMENT` |
+| User Secrets (dev) | Giá trị nhạy cảm: connection strings, JWT keys | `dotnet run` local (Development) |
+| `launchSettings.json` env vars | Config cho VS profile | F5 Docker (profile Container) |
+| Biến môi trường | Cấu hình production / docker-compose | docker-compose, CI/CD, server |
+
+**Chi tiết các file env-specific:**
+| File | Environment | Nội dung |
+|------|-------------|----------|
+| `appsettings.Development.json` | Development | Frontend URL local, Cookie.Secure=true |
+| `appsettings.Docker.json` | Docker | ConnectionStrings fallback, Cookie.Secure=false |
+| `appsettings.Production.json` | Production | Frontend URL placeholder |
+
+**Flow lấy ConnectionString theo từng cách chạy:**
+
+| Cách chạy | Connection String lấy từ | Server |
+|-----------|-------------------------|--------|
+| **F5 Docker** | `launchSettings.json` (env var) | `host.docker.internal` |
+| **`dotnet run`** | User Secrets | `localhost` |
+| **`docker-compose up`** | `docker-compose.yml` (env var) | `sqlserver` (DNS nội bộ) |
 
 ### Các Key Cấu Hình Quan Trọng (User Secrets hoặc env)
 ```

@@ -1,7 +1,7 @@
 # Docker Compose — Orchestration
 
-- **File:** `docker-compose.yml`, `.env.template`, `appsettings.Docker.json`
-- **Phụ thuộc:** `Dockerfile`, `Program.cs` (--migrate flag)
+- **File:** `docker-compose.yml`, `.env`, `appsettings.Docker.json`
+- **Phụ thuộc:** `Dockerfile`, `Program.cs` (--migrate flag), `launchSettings.json`
 - **Mục tiêu:** Chạy 3 container (API + SQL Server + Redis) phối hợp với nhau
 
 ---
@@ -59,6 +59,8 @@ api:
   build:
     context: .
     dockerfile: AuthApi.WebApi/Dockerfile
+  entrypoint: >
+    sh -c "dotnet AuthApi.WebApi.dll --migrate || dotnet AuthApi.WebApi.dll"
   ports:
     - "${API_PORT:-5000}:8080"
   healthcheck:
@@ -87,7 +89,11 @@ api:
 
 **`build.context` và `build.dockerfile`:**
 - Context là thư mục gốc (`.`), Dockerfile nằm ở `AuthApi.WebApi/Dockerfile`
-- **Nếu sai context:** Docker không tìm thấy file .csprop vì đường dẫn tương đối
+- **Nếu sai context:** Docker không tìm thấy file .csproj vì đường dẫn tương đối
+
+**`entrypoint` (--migrate):**
+- Chạy migration EF Core trước, nếu thành công mới start server
+- `sh -c "cmd1 || cmd2"` — nếu migrate fail (do DB đã migrate rồi) → vẫn start server
 
 **`ports` mapping:**
 - `${API_PORT:-5000}:8080` → Host port (lấy từ .env, mặc định 5000) map vào container port 8080
@@ -95,8 +101,8 @@ api:
 
 **`healthcheck`:**
 - Dùng `curl` gọi `http://localhost:8080/health` mỗi 15 giây
-- `start_period: 60s` — cho API thời gian khởi động (migrate + seed)
-- **Nếu thiếu:** Docker không biết API đã sẵn sàng hay chưa; load balancer có thể gửi request vào container chưa ready
+- Image base có cài `curl` (xem Dockerfile stage base)
+- **Nếu thiếu curl:** Health check luôn fail → container báo unhealthy
 
 **`depends_on`:**
 - `sqlserver` có `condition: service_healthy` → API chỉ start sau khi SQL Server health check pass
@@ -147,7 +153,6 @@ sqlserver:
 **`sqlcmd` healthcheck:**
 - Dùng SQLCMD kiểm tra SQL Server sẵn sàng nhận kết nối
 - Cờ `-C` (trust certificate) — cần vì SQL Server container dùng self-signed cert
-- `start_period: 30s` — SQL Server cần ~20-30s để khởi động lần đầu
 - **Nếu thiếu:** API không biết SQL Server đã sẵn sàng → crash khi connect
 
 ### □ 3.4 Redis Service
@@ -183,14 +188,14 @@ volumes:
 - **Nếu dùng bind mount (`./data:/var/opt/mssql`):** Không portable—phụ thuộc vào OS
 - **Named volumes:** Docker quản lý, portable, backup dễ
 
-### □ 3.6 `.env.template` — Biến Môi Trường
+### □ 3.6 `.env` — Biến Môi Trường
 
 ```bash
 # === SA Password cho SQL Server (bắt buộc phải thay đổi) ===
 SA_PASSWORD=Nhonaovay@1
 
 # === JWT Key (bắt buộc phải thay đổi, tối thiểu 32 ký tự) ===
-JWT_KEY=NguyenThanhTuanKrp1PhuTucKrongPaGiaLaiNhoNhaovay@1
+JWT_KEY=tnp-travel-now-project
 
 # === JWT Issuer & Audience (tùy chọn) ===
 JWT_ISSUER=TravelNow
@@ -220,27 +225,35 @@ SA_PASSWORD=MyRealPassword
 
 ```json
 {
-  "Logging": {
-    "LogLevel": {
-      "Default": "Information",
-      "Microsoft.AspNetCore": "Warning"
-    }
+  "Serilog": { ... },
+  "ConnectionStrings": {
+    "Default": "Server=sqlserver,1433;Database=AuthDb;User Id=sa;Password=Nhonaovay@1;TrustServerCertificate=True",
+    "Redis": "redis:6379"
   },
-  "Frontend": {
-    "Url": "https://localhost:3001"
-  },
-  "Cookie": {
-    "Secure": false
-  }
+  "Frontend": { "Url": "https://localhost:3001" },
+  "Cookie": { "Secure": false }
 }
 ```
 
 - `ASPNETCORE_ENVIRONMENT=Docker` → ASP.NET load `appsettings.Docker.json` (sau `appsettings.json`)
+- **`ConnectionStrings`** — Fallback values khi chạy standalone (không docker-compose). Nếu chạy docker-compose, env vars ghi đè các giá trị này.
 - **`Cookie.Secure = false`:** Trong container HTTP (không HTTPS), cookie secure=true sẽ không gửi được
-- **Nếu thiếu `Cookie.Secure = false`:** Cookie không được set → authentication không hoạt động trong Docker
 
-### □ 3.8 Migration Tự Động (Program.cs --migrate)
+**Thứ tự ưu tiên config (thấp → cao):**
+1. `appsettings.json` — base config
+2. `appsettings.Docker.json` — Docker-specific
+3. **Environment Variables** (từ docker-compose) — ghi đè file config
 
+### □ 3.8 Migration Tự Động (entrypoint --migrate)
+
+```yaml
+entrypoint: >
+  sh -c "dotnet AuthApi.WebApi.dll --migrate || dotnet AuthApi.WebApi.dll"
+```
+
+- Chạy EF Core migration + seed data (roles) khi container start
+- `||` operator: nếu migrate fail (DB đã migrate), vẫn start server
+- Code trong Program.cs:
 ```csharp
 if (args.Contains("--migrate"))
 {
@@ -249,10 +262,82 @@ if (args.Contains("--migrate"))
     await db.Database.MigrateAsync();
 }
 ```
-
-- Docker Compose gọi: `dotnet AuthApi.WebApi.dll --migrate`
-- Chạy EF Core migration + seed data (roles) khi container start
 - **Nếu thiếu:** Database schema không được tạo → API trả về lỗi "Invalid object name 'AspNetUsers'"
+
+### □ 3.9 Các Chế Độ Chạy Khác Nhau
+
+Dự án hỗ trợ **3 cách chạy**, mỗi cách dùng connection string khác nhau:
+
+| Cách chạy | Connection String | Lấy từ | Server |
+|-----------|-------------------|--------|--------|
+| **F5 Docker** | `host.docker.internal` | `launchSettings.json` (env var) | Container API → host → container SQL |
+| **`dotnet run`** | `localhost` | User Secrets (máy local) | App Windows → container SQL |
+| **`docker-compose up`** | `sqlserver` | `docker-compose.yml` (env var) | Container API → service name → container SQL |
+
+```
+┌──────────────────────────────────────────────────────────┐
+│              3 Flow Lấy Connection String                  │
+│                                                           │
+│  Flow 1: docker-compose up                                │
+│  Container API ──→ sqlserver:1433 ──→ Container SQL      │
+│  (DNS nội bộ, cùng network)                               │
+│                                                           │
+│  Flow 2: F5 Docker (VS)                                   │
+│  Container API ──→ host.docker.internal:1433 ──→ Windows  │
+│       └──→ localhost:1433 ──→ Container SQL               │
+│  (Container cô lập, phải qua host)                        │
+│                                                           │
+│  Flow 3: dotnet run (local)                               │
+│  Windows App ──→ localhost:1433 ──→ Container SQL          │
+│  (App trên Windows, gọi thẳng)                            │
+└──────────────────────────────────────────────────────────┘
+```
+
+**Giải thích `host.docker.internal`:**
+
+Trong Docker, `localhost` của một container là **chính nó**, không phải container khác hay máy host:
+
+```
+Container API                         Container SQL
+┌────────────────┐                   ┌────────────────┐
+│ localhost = ❌  │                   │ localhost = ✅  │
+│ (chính nó)     │                   │ (chính nó)      │
+│                 │                   │                  │
+│ host.docker.    │                   │ Port 1433        │
+│ internal:1433 ──┼───→ Windows ─────→                  │
+└────────────────┘                   └──────────────────┘
+```
+
+`host.docker.internal` là DNS đặc biệt do Docker tạo, trỏ về máy Windows host.
+
+### □ 3.10 launchSettings.json — VS Docker Profile
+
+```json
+"Container (Dockerfile)": {
+  "commandName": "Docker",
+  "environmentVariables": {
+    "ASPNETCORE_HTTPS_PORTS": "8081",
+    "ASPNETCORE_HTTP_PORTS": "8080",
+    "ConnectionStrings__Default": "Server=host.docker.internal,1433;...",
+    "ConnectionStrings__Redis": "host.docker.internal:6379"
+  }
+}
+```
+
+- VS dùng profile này khi F5 Docker
+- Các env var này được inject vào container khi docker run
+- Environment variables có độ ưu tiên cao nhất trong .NET config chain
+
+### □ 3.11 User Secrets — Cho Local Dev
+
+Khi chạy `dotnet run` local, connection string lấy từ **User Secrets** (không commit lên git):
+
+```bash
+dotnet user-secrets set "ConnectionStrings:Default" "Server=localhost,1433;..."
+dotnet user-secrets set "ConnectionStrings:Redis" "localhost:6379"
+```
+
+User Secrets là file ngoài thư mục dự án, được `.gitignore` mặc định, chỉ dùng trong Development.
 
 ---
 
@@ -285,7 +370,7 @@ Step 4: Start api (chờ sqlserver healthy)
     │
     ▼
 Step 5: Ready!
-    http://localhost:5000/swagger
+    http://localhost:5000/health
 ```
 
 ---
@@ -300,4 +385,5 @@ Step 5: Ready!
 | **Certificate SSL** | `TrustServerCertificate=True` trong connection string |
 | **Healthcheck timeout** | `start_period: 30s` cho sqlserver, `60s` cho api |
 | **Container không connect được sqlserver** | `depends_on: condition: service_healthy` |
-| **Migration fail** | Docker compose dùng `entrypoint` chạy migrate trước khi start server |
+| **Health check luôn unhealthy** | Image base cần có `curl` (xem Dockerfile) |
+| **F5 Docker không kết nối được DB** | Dùng `host.docker.internal` thay vì `localhost` |

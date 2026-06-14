@@ -9,10 +9,14 @@
 ## Business Logic
 - [BUSINESS_DOMAIN.md](./BUSINESS_DOMAIN.md) — Business logic (tiếng Việt)
 
+## Detail Docs
+- [detail_docs/HOW_TO_ADD_FEATURE.md](./detail_docs/HOW_TO_ADD_FEATURE.md) — Cách thêm tính năng mới
+- [detail_docs/CHANGELOG_FLOW.md](./detail_docs/CHANGELOG_FLOW.md) — Chi tiết các patch refactor (IUserContext, Dapper, Redis, CQRS)
+- [detail_docs/docker tutorial/](./detail_docs/docker%20tutorial/) — Dockerfile multi-stage, docker-compose, CI/CD, Health Checks
+
 ## Guides
 - [guides/HOW_TO_ADD_FEATURE.md](./guides/HOW_TO_ADD_FEATURE.md) — Cách thêm tính năng mới
 - [guides/docker-tutorial/](./guides/docker-tutorial/) — Docker, CI/CD, Integration Tests, Health Checks
 
 ## Changelogs
 - [changelogs/ME_BRANCH_RESULT.md](./changelogs/ME_BRANCH_RESULT.md) — Kết quả Me branch (4 patches)
-- [changelogs/CHANGELOG_FLOW.md](./changelogs/CHANGELOG_FLOW.md) — *(sẽ merge vào các file khác)*

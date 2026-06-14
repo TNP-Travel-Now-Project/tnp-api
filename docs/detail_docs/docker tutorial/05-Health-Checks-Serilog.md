@@ -282,6 +282,12 @@ api:
 - `/health` check cả SQL Server + Redis — toàn diện hơn
 - Không cần cài `mssql-tools` trong API image → image nhỏ hơn
 
+**Lưu ý:** Image base `mcr.microsoft.com/dotnet/aspnet:10.0` không có `curl` mặc định. `curl` được cài trong Dockerfile stage `base`:
+```dockerfile
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+```
+Nếu thiếu `curl`, health check luôn fail → container báo `unhealthy`.
+
 ---
 
 ## 📦 NuGet Packages Added

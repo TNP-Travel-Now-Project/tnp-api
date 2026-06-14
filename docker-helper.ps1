@@ -37,17 +37,17 @@ function RunCompose {
 switch ($Command) {
     'up-d' {
         Write-Host ">>> docker-compose up -d..." -ForegroundColor Green
-        RunCompose up -d
+        RunCompose @('up', '-d')
         RunCompose ps
     }
     'up-d--build' {
         Write-Host ">>> docker-compose up -d --build..." -ForegroundColor Green
-        RunCompose up -d --build
+        RunCompose @('up', '-d', '--build')
         RunCompose ps
     }
     'up-d--build-api' {
         Write-Host ">>> docker-compose up -d --build api..." -ForegroundColor Green
-        RunCompose up -d --build api
+        RunCompose @('up', '-d', '--build', 'api')
         RunCompose ps
     }
     'down' {
@@ -58,18 +58,18 @@ switch ($Command) {
         Write-Host ">>> CẢNH BÁO: docker-compose down -v (mất data)!" -ForegroundColor Red
         $confirm = Read-Host "Chắc chắn? Gõ 'y' để xóa (y/N)"
         if ($confirm -eq 'y') {
-            RunCompose down -v
+            RunCompose @('down', '-v')
         } else {
             Write-Host "Đã hủy." -ForegroundColor Yellow
         }
     }
     'logs' {
         Write-Host ">>> docker-compose logs -f..." -ForegroundColor Cyan
-        RunCompose logs -f
+        RunCompose @('logs', '-f')
     }
     'logs-api' {
         Write-Host ">>> docker-compose logs -f api..." -ForegroundColor Cyan
-        RunCompose logs -f api
+        RunCompose @('logs', '-f', 'api')
     }
     'ps' {
         Write-Host ">>> docker-compose ps:" -ForegroundColor Cyan
@@ -88,7 +88,7 @@ switch ($Command) {
         Write-Host ">>> docker-compose pull..." -ForegroundColor Green
         RunCompose pull
         Write-Host ">>> docker-compose up -d --build api..." -ForegroundColor Green
-        RunCompose up -d --build api
+        RunCompose @('up', '-d', '--build', 'api')
     }
     'clean' {
         Write-Host ">>> docker system prune + docker volume prune..." -ForegroundColor Yellow

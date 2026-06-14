@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: AuthApi.WebApi/Dockerfile
     entrypoint: >
-      sh -c "dotnet AuthApi.WebApi.dll --migrate && dotnet AuthApi.WebApi.dll"
+      sh -c "dotnet AuthApi.WebApi.dll --migrate || dotnet AuthApi.WebApi.dll"
     ports:
       - "${API_PORT:-5000}:8080"
     healthcheck:

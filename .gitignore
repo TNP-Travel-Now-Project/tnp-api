@@ -53,5 +53,9 @@ CodeCoverage/
 
 # NUnit
 *.VisualState.xml
+*.csproj.user
 TestResult.xml
 nunit-*.xml
+
+# Env
+.env
