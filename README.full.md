@@ -2,34 +2,51 @@
 
 > Backend API cho ứng dụng quản lý tài chính cá nhân & du lịch nhóm
 
-Backend API xây dựng bằng **C# / .NET 10** (ASP.NET Core Web API) với **SQL Server + Redis**, theo **kiến trúc Clean Architecture** (Domain – Application – Infrastructure – WebApi) kết hợp **CQRS/MediatR**. Hiện tại hệ thống đã triển khai: xác thực & tài khoản, quản lý người dùng — kèm hạ tầng Redis cache, Hangfire, health checks, logging, bảo mật và đóng gói Docker.
+Backend API xây dựng bằng **C# / .NET 10** (ASP.NET Core Web API) với **SQL Server + Redis**, theo **kiến trúc Clean Architecture** (Domain – Application – Infrastructure – WebApi) kết hợp **CQRS/MediatR**. Hệ thống bao phủ: xác thực & tài khoản, quản lý người dùng, tài chính cá nhân, chuyến đi nhóm và chat realtime — kèm background jobs, logging, health checks và đóng gói Docker.
+
+> **Chú thích trạng thái:** ✅ Đã triển khai API | 🔶 Entity & migration đã có — API đang phát triển
 
 ---
 
 ## Tính Năng Nghiệp Vụ
 
-### Đăng nhập & Tài khoản
+### Đăng nhập & Tài khoản ✅
 - Đăng ký tài khoản với **xác thực email** (token có thời hạn 30 phút).
 - Đăng nhập bằng email + mật khẩu, trả **JWT Access Token** + **Refresh Token** (lưu cookie).
 - Tự động **refresh token** khi access token hết hạn; **logout** thu hồi refresh token.
 - Quên mật khẩu: gửi **OTP** qua email → đặt lại mật khẩu mới.
-- **Me**: lấy thông tin người dùng hiện tại từ token.
 - Phân quyền theo vai trò (**RBAC**): roles `Admin` / `User`, policies `RequireAdmin`, `RequireUser`, `RequireAdminOrUser`.
 - Chính sách mật khẩu + **lockout** sau 5 lần sai (10 phút), bắt buộc xác nhận email.
 
-### Quản lý người dùng
-- Danh sách người dùng và chi tiết theo ID.
-- Cập nhật thông tin cá nhân.
+### Quản lý người dùng ✅
+- Admin xem danh sách / chi tiết người dùng, cập nhật thông tin cá nhân.
 - Gán / gỡ **role** cho người dùng.
 - **Khóa tài khoản** (soft delete) thay vì xóa vật lý.
 
-### Hạ tầng & Vận hành
-- **Redis cache** + **SignalR Redis backplane** (đã đăng ký DI).
-- **Hangfire Dashboard** tại `/hangfire`.
-- **Health Checks** tại `/health` (SQL Server + Redis). 
-- **Serilog** logging có cấu trúc.
-- Middleware bảo mật: **Exception**, **CSRF**, **Secure Headers**.
-- **Swagger** (OpenAPI) tại `/swagger`.
+### Tài chính cá nhân 🔶
+- **Wallet**: nhiều ví (Tiền mặt, Ngân hàng, Thẻ tín dụng…), multi-currency; `balance` là giá trị **cache** — nguồn thật luôn tính từ `Transaction`.
+- **Transaction**: mọi khoản thu/chi/chuyển tiền (`income` / `expense` / `transfer`); chuyển tiền xử lý atomic qua `transfer_group_id`.
+- **Category**: danh mục hệ thống (`user_id = NULL`) + danh mục cá nhân, hỗ trợ phân cấp.
+- **Budget**: giới hạn chi theo danh mục/kỳ; `spent` tính từ `Transaction`, cảnh báo khi ≥ 80% hạn mức.
+- **RecurringTransaction**: thu/chi định kỳ, tự động sinh giao dịch qua background job.
+- **SavingGoal**, **Debt**, **ExchangeRate** (multi-currency), **Tag / TransactionTag**, **Notification**.
+
+### Chuyến đi nhóm (Travel) 🔶
+- **Trip** là container chính; khi tạo Trip → tự động tạo **TripChatRoom**.
+- **TripMember** với vai trò (Organizer / Member / Viewer) + trạng thái lời mời.
+- **TripInvitation**: mời qua link/email bằng token có thời hạn.
+- **TripActivity**: lịch trình theo ngày, có thứ tự sắp xếp.
+- **TripExpense + TripExpenseSplit**: ghi chi tiêu nhóm, chia đều / chia tùy chỉnh.
+- **TripDebt**: ma trận "ai nợ ai"; **TripSettlement**: thanh toán dứt nợ sau chuyến đi.
+
+### Chat realtime 🔶
+- Mỗi Trip có đúng 1 **TripChatRoom**; tin nhắn gồm User Message và System Message.
+- **SignalR + Redis Backplane** đẩy tin nhắn realtime tới mọi thành viên.
+- Hệ thống tự tạo System Message khi có sự kiện quan trọng (thêm chi phí, thêm hoạt động…).
+
+### Hạ tầng & Vận hành 🔶
+- Background jobs qua **Hangfire** (storage SQL Server + Redis).
+- **Serilog** logging; **Health Checks** (`/health`: SQL Server + Redis).
 - **Docker multi-stage** + **docker-compose** (API + SQL Server + Redis), tự migrate khi khởi động.
 
 ---
@@ -66,7 +83,7 @@ AuthApi.slnx
 ├── AuthApi.Infrastructure/    # EF Core, Dapper, Identity, Redis, Hangfire, Services, Migrations
 ├── AuthApi.WebApi/            # Controllers, Middlewares, HealthChecks, Dockerfile
 ├── AuthApi.Tests/             # Unit tests
-├── AuthApi.IntegrationTests/  # Integration tests
+├── AuthApi.IntegrationTests/  # Integration tests (Testcontainers)
 ├── docs/                      # Tài liệu kỹ thuật (markdown)
 └── docker-compose.yml         # API + SQL Server + Redis
 ```
@@ -83,8 +100,8 @@ AuthApi.slnx
 | ASP.NET Core Identity + JWT Bearer 10.0.6 | Xác thực, phân quyền RBAC |
 | MediatR 12.1.1 + FluentValidation 12.1.1 | CQRS pipeline + validate đầu vào |
 | StackExchange.Redis 2.12.14 | Cache + SignalR backplane |
-| Hangfire 1.8.23 | Background jobs (dashboard) |
-| SignalR 10.0.9 | Realtime (Redis backplane đã đăng ký) |
+| Hangfire 1.8.23 | Background jobs |
+| SignalR 10.0.9 | Chat realtime |
 | Serilog 10.0.0 | Logging có cấu trúc |
 | Swashbuckle 10.1.7 | Swagger / OpenAPI |
 | AspNetCore.HealthChecks.UI | Giám sát SQL Server + Redis |
@@ -95,7 +112,7 @@ AuthApi.slnx
 - Middleware **CSRF**, **Secure Headers** và **Exception** tập trung.
 - Truy vấn qua EF Core / Dapper tham số hóa → chống SQL injection.
 - Chính sách mật khẩu, lockout 5 lần sai, bắt buộc xác nhận email.
-- Soft delete (`deleted_at`) + audit fields (`created_at`, `created_by_id`, `updated_at`, `updated_by_id`).
+- Soft delete (`deleted_at`) + audit fields (`created_at`, `created_by_id`, `updated_at`, `updated_by_id`) theo chuẩn thiết kế.
 
 ---
 
@@ -175,6 +192,8 @@ dotnet test
 - **Service** trả `Result<T>`, không throw cho lỗi nghiệp vụ.
 - **FluentValidation** auto-register qua assembly scanning, không dùng Data Annotations.
 - **Soft Delete** (`deleted_at`), không DELETE vật lý.
+- `Wallet.balance`, `Budget.spent`, `Trip.total_spent` là **cache** — source of truth là `Transaction` / `TripExpense`.
+- **Background job** qua Hangfire, email gửi bất đồng bộ.
 - **Audit fields chuẩn:** `created_at`, `created_by_id`, `updated_at`, `updated_by_id`, `deleted_at`.
 
 Xem chi tiết tại [docs/03_RULES.md](docs/03_RULES.md) và [docs/04_AI_CONTEXT.md](docs/04_AI_CONTEXT.md).
