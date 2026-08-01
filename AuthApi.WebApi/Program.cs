@@ -269,9 +269,11 @@ namespace AuthApi.WebApi
             }
             #endregion
 
+            // OpenAPI FE can UseSwagger o tat ca moi truong de bat lay schema
+            app.UseSwagger();
+
             if (app.Environment.IsDevelopment())
             {
-                app.UseSwagger();
                 app.UseSwaggerUI();
             }
 

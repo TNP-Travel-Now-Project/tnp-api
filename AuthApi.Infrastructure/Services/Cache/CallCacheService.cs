@@ -1,5 +1,5 @@
 ﻿using AuthApi.Application.Abstractions.Interfaces.Cache;
-using AuthApi.Application.Features.Users.DTOs;
+using AuthApi.Application.Features.Auth.DTOs;
 using System.Globalization;
 
 namespace AuthApi.Infrastructure.Services.Cache

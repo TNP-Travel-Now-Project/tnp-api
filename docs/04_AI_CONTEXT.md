@@ -34,6 +34,8 @@ Thứ tự middleware KHÔNG được thay đổi. ExceptionMiddleware bắt `Va
 
 - **Login:** email/password → UserManager → JWT (15m, body) + RefreshToken (30d, HttpOnly cookie) + CSRF-TOKEN cookie
 - **Refresh:** Cookie `refreshToken` → validate DB → revoke cũ → issue cặp mới (token rotation bắt buộc)
+
+**Token expiry inconsistency:** `ITokenService` interface default `expiredDay = 15`, nhưng `TokenService` implementation default `expiredDay = 30`. Thực tế dùng **30 ngày** (implementation wins). Khi implement tính năng mới liên quan, cần đồng bộ.
 - **CSRF:** Cookie `CSRF-TOKEN` vs header `X-CSRF-TOKEN` cho POST/PUT/PATCH/DELETE
 - **Claims:** nameid (userId), email, unique_name (userName), role[]
 - **Email confirmation bắt buộc** để đăng nhập. User không confirm trong 2h bị auto-delete (Hangfire job).
@@ -80,12 +82,395 @@ TripChatRoom → TripMessage
 - TripMessage.message_type: Text, System, ActivityCard, ExpenseCard, PlaceCard. metadata dùng JSONB.
 - TripChatRoom: 1-1 với Trip.
 
+---
+
+## Feature Flows (Layer-by-Layer)
+
+### MODULE: AUTH — 7 endpoints
+
+---
+
+#### 1. POST /api/auth/login
+
+**Controller** (`AuthController.Login`)
+→ nhận `LoginCommand(Email, Password, RememberMe)`
+→ `mediator.Send(command)`
+→ kiểm tra `result.IsSuccess` → `Ok(LoginResponse)` / `BadRequest(ApiErrorResponse)`
+
+**Validator** (`LoginCommandValidator`)
+→ Email required + valid format
+→ Password 8-20 ký tự, uppercase, lowercase, digit, special
+
+**Handler** (`LoginCommandHandler`)
+→ `_identities.LoginAsync(request)` — 1 dòng
+
+**Service** (`IdentityService.LoginAsync`)
+1. `_userManager.FindByEmailAsync(email)` — tìm user
+2. `_userManager.IsLockedOutAsync(user)` — check lockout (5 lần sai → 10 phút)
+3. Check `user.EmailConfirmed` — phải confirm mới login được
+4. `_userManager.CheckPasswordAsync(user, password)` — verify password
+5. `_userManager.ResetAccessFailedCountAsync(user)` — reset fail count
+6. `_userManager.GetRolesAsync(user)` — lấy roles
+7. `_tokenService.GenerateTokensAsync(userDto, roles)` — tạo JWT + refresh token
+
+→ Return `Result<LoginResponse>`
+
+**TokenService.GenerateTokensAsync**
+1. `GeneralJwtToken()` — tạo JWT (HMAC-SHA256, 15 phút, claims: nameid, email, unique_name, role[])
+2. `GenerateRefreshTokenString()` — 64-byte random → Base64
+3. Lưu `RefreshToken` entity vào DB (UserId, Token, ExpiresAt, IsRevoked=false)
+4. `_tokenHandler.SetRefreshToken()` — set HttpOnly cookie
+5. `_tokenHandler.SetCSRFToken()` — set non-HttpOnly cookie
+6. Return `AuthResponse(AccessToken, RefreshToken=null, AccessTokenExpiresAt)`
+
+**DTO Response:** `LoginResponse(accessToken, refreshToken=null, expired, userId, email, roles[])`
+
+---
+
+#### 2. POST /api/auth/register
+
+**Controller** (`AuthController.Register`)
+→ nhận `RegisterCommand(Email, FirstName, LastName, UserName, PhoneNumber, DateOfBirth, Password, ConfirmPassword)`
+→ `mediator.Send(command)`
+→ `Created(...)` / `BadRequest(ApiErrorResponse)`
+
+**Validator** (`RegisterCommandValidator`)
+→ FirstName, LastName required + max 50
+→ UserName required + max 256
+→ Email required + valid
+→ PhoneNumber required + đúng 10 số
+→ DateOfBirth: 18-25 tuổi
+→ Password: 8-20, uppercase, lowercase, digit, special
+→ ConfirmPassword == Password
+
+**Handler** (`RegisterCommandHandler`)
+→ `Email.Create(request.Email)` — validate email domain (value object)
+→ rebuild request với email đã validate
+→ `_identities.RegisterAsync(newRes)`
+
+**Service** (`IdentityService.RegisterAsync`)
+1. Tạo `ApplicationUser` (extends IdentityUser: FirstName, LastName, DOB, CreatedAt)
+2. `_userManager.CreateAsync(user, password)` — tạo user trong DB
+3. `_userManager.AddToRoleAsync(user, "User")` — gán role mặc định
+4. `_userManager.GenerateEmailConfirmationTokenAsync(user)` — tạo token
+5. Build confirm link: `FrontendUrl/api/auth/verify-email?userId={id}&token={encoded}`
+6. `_jobClient.Enqueue(() => _emailService.SendEmailAsync(...))` — gửi email confirm (Hangfire)
+7. `_jobClient.Schedule<EmailCleanupJob>(p => p.DeleteUnverifiedUser(user.Id), 2h)` — auto-delete nếu không confirm
+
+→ Return `Result<RegisterResponse>`
+
+**DTO Response:** `RegisterResponse(UserId, FirstName, LastName, UserName, Email, CreatedAt)`
+
+---
+
+#### 3. POST /api/auth/verify-email
+
+**Controller** (`AuthController.VerifyEmail`)
+→ `[FromQuery] Guid userId, [FromQuery] string token`
+→ `mediator.Send(new VerifyEmailCommand(userId, token))`
+→ `Ok()` / `BadRequest(ApiErrorResponse)`
+
+**Handler** (`VerifyEmailCommandHander`)
+→ `_identities.VerifyEmailAsync(request.UserId, request.Token)`
+
+**Service** (`IdentityService.VerifyEmailAsync`)
+1. `_userManager.FindByIdAsync(userId)` — tìm user
+2. `_userManager.ConfirmEmailAsync(user, token)` — confirm email
+3. Nếu fail → return error với detail từ Identity errors
+
+→ Return `Result<bool>`
+
+---
+
+#### 4. POST /api/auth/send-otp
+
+**Controller** (`AuthController.SendOTPByEmail`)
+→ `[FromQuery] string email`
+→ `mediator.Send(new SendOTPCommand(email))`
+→ `Ok(OtpResponse)` / `BadRequest(ApiErrorResponse)`
+
+**Handler** (`SendOTPCommandHandler`)
+→ `Email.Create(request.Email)` — validate email domain
+→ `_identities.SendOTPAsync(email.Value)`
+
+**Service** (`IdentityService.SendOTPAsync`)
+1. `_userManager.FindByEmailAsync(email)` — kiểm tra email tồn tại trong hệ thống
+2. `_emailChecker.IsValidAsync(email)` — kiểm tra MX record (DnsClient)
+3. Tạo OTP 4 số: `RandomNumberGenerator.GetInt32(1000, 9999)`
+4. Lưu OTP vào Redis: `StringSetAsync("otp:{email}", otp, 5 phút)`
+5. `_jobClient.Enqueue(() => _emailService.SendEmailAsync(...))` — gửi OTP qua email
+
+→ Return `Result<OtpResponse>`
+
+**DTO Response:** `OtpResponse { Email, Expired }`
+
+---
+
+#### 5. POST /api/auth/reset-password
+
+**Controller** (`AuthController.ResetPassword`)
+→ nhận `ResetPasswordCommand(Email, Otp, NewPass)`
+→ `mediator.Send(command)`
+→ `Ok(NewPassResponse)` / `BadRequest(ApiErrorResponse)`
+
+**Validator** (`ResetPassCommandValidator`)
+→ Email required + valid
+→ OTP required + đúng 4 số
+→ NewPass: 8-20, uppercase, lowercase, digit, special
+
+**Handler** (`ResetPassCommandHandler`)
+→ `Email.Create(request.Email)` — validate domain
+→ `_identities.SetNewPassAsync(newRequest)`
+
+**Service** (`IdentityService.SetNewPassAsync`)
+1. Redis: `StringGetAsync("otp:{email}")` — lấy OTP từ Redis
+2. Nếu key không tồn tại → `"OTP expired or not found"`
+3. Nếu OTP không khớp → `"OTP incorrect"`
+4. `db.KeyDeleteAsync(key)` — xóa OTP sau khi dùng
+5. `_userManager.FindByEmailAsync(email)` — tìm user
+6. `_userManager.GeneratePasswordResetTokenAsync(user)` — tạo reset token
+7. `_userManager.ResetPasswordAsync(user, token, newPass)` — đặt mật khẩu mới
+8. Update `user.UpdatedAt`
+
+→ Return `Result<NewPassResponse>`
+
+**DTO Response:** `NewPassResponse { Email, NewPassword }`
+
+---
+
+#### 6. POST /api/auth/refresh-token
+
+**Controller** (`AuthController.RefreshToken`)
+→ (không có body — đọc từ cookie)
+→ `mediator.Send(new RefreshTokenCommand())`
+→ `Ok(RefreshTokenResponse)` / `BadRequest(ApiErrorResponse)`
+
+**Handler** (`RefeshTokenCommandHandler`)
+→ `_identities.RefeshTokenAsync(request)`
+
+**Service** (`IdentityService.RefeshTokenAsync`)
+→ `_tokenService.RefreshTokenAsync()`
+
+**TokenService.RefreshTokenAsync**
+1. `_tokenHandler.GetRefreshToken()` — đọc refresh token từ HttpOnly cookie
+2. Query DB: tìm RefreshToken còn hạn, chưa revoked
+3. `_userManager.FindByIdAsync(userId)` — lấy user
+4. `_userManager.GetRolesAsync(user)` — lấy roles
+5. **Revoke token cũ:** `refreshTokenEntity.IsRevoked = true`
+6. `GenerateTokensAsync(user, roles)` — tạo JWT + refresh token mới
+7. Set cookies mới (refreshToken + CSRF-TOKEN)
+
+→ Return `Result<RefreshTokenResponse>`
+
+**DTO Response:** `RefreshTokenResponse(accessToken, refreshtoken=null, expiredAt)`
+
+---
+
+#### 7. POST /api/auth/logout
+
+**Controller** (`AuthController.Logout`)
+→ (không có body)
+→ `mediator.Send(new LogoutCommand())`
+→ `Ok(LogoutResponse)` / `BadRequest(ApiErrorResponse)`
+
+**Handler** (`LogoutCommandHandler`)
+→ `_identities.LogoutAsync(request)` — 1 dòng
+
+**Service** (`IdentityService.LogoutAsync`)
+1. `_tokenService.RevokeRefreshTokenAsync()` — revoke refresh token trong DB
+2. `_tokenHandler.ClearTokens()` — xóa cookies (refreshToken, CSRF-TOKEN)
+
+**TokenService.RevokeRefreshTokenAsync**
+→ Đọc refresh token từ cookie → tìm entity → set `IsRevoked = true` → save
+
+**AuthCookieService.ClearTokens**
+→ Xóa cookies: `refreshToken`, `CSRF-TOKEN`
+
+→ Return `Result<LogoutResponse>`
+
+**DTO Response:** `LogoutResponse(Message: "Logout successful")`
+
+---
+
+### MODULE: USER — 7 endpoints
+
+---
+
+#### 8. GET /api/users
+
+**Controller** (`UserController.GetUsers`)
+→ `[AllowAnonymous]`
+→ **Không qua MediatR** (gọi thẳng repository)
+→ `_userRepo.GetAllUsersAsync()`
+→ `Ok(List<UserListItemDto>)`
+
+**Repository** (`UserReadRepository.GetAllUsersAsync`)
+1. Query 1: `SELECT Id, Email, UserName, FirstName, LastName, CreatedAt FROM AspNetUsers`
+2. Query 2: `SELECT ur.UserId, r.Name AS Role FROM AspNetUserRoles ur JOIN AspNetRoles r`
+3. Map roles vào từng user bằng `roleLookup` dictionary
+
+**DTO Response:** `List<UserListItemDto { Id, Email, UserName, FirstName, LastName, Roles[], CreatedAt }>`
+
+---
+        
+#### 9. GET /api/users/me
+
+**Controller** (`UserController.Me`)
+→ `[Authorize]`
+→ `mediator.Send(new MeQuery())`
+→ check `ErrorCodes.UserNotFound` → 404
+→ `Ok(MeResponse)` / `Unauthorized(ApiErrorResponse)`
+
+**Handler** (`MeQueryHandler`)
+1. Check `_context.IsAuthenticated` — nếu không → fail
+2. `_callCache.TryGetCachedAsync(cacheKey)` — check Redis cache trước
+3. Nếu cache hit → return luôn
+4. `_userRepo.GetMeAsync(userId)` — cache miss → query DB
+5. `_callCache.TrySetCacheAsync(cacheKey, user, 5 phút)` — set cache
+→ Return `Result<MeResponse>`
+
+**Repository** (`UserReadRepository.GetMeAsync`)
+1. `QueryMultipleAsync` — 2 queries:
+   - `SELECT ... FROM AspNetUsers WHERE Id = @UserId`
+   - `SELECT r.Name FROM AspNetRoles r JOIN AspNetUserRoles ur WHERE ur.UserId = @UserId`
+2. Map roles vào user response
+
+**DTO Response:** `MeResponse { Id, Email, UserName, FirstName, LastName, DateOfBirth, PhoneNumber, EmailConfirmed, Roles[], CreatedAt, UpdatedAt }`
+
+---
+
+#### 10. GET /api/users/{id:guid}
+
+**Controller** (`UserController.GetUserById`)
+→ `[Authorize(Policy = "RequireAdmin")]`
+→ `mediator.Send(new GetUserByIdQuery(id))`
+→ check error codes: NotFound → 404, Forbidden → 403, Unauthorized → 401
+
+**Handler** (`GetUserByIdQueryHandler`)
+1. Check `_context.IsAuthenticated` — nếu không → fail Unauthorized
+2. Check `_context.IsInRole("Admin")` — nếu không → fail Forbidden
+3. `_userRepo.GetUserDetailAsync(request.UserId)` — query DB
+→ Return `Result<UserDetailResponse>`
+
+**Repository** (`UserReadRepository.GetUserDetailAsync`)
+1. `QueryMultipleAsync`:
+   - `SELECT ... (Id, Email, UserName, ..., LockoutEnd, AccessFailedCount, ...) FROM AspNetUsers`
+   - `SELECT r.Name FROM AspNetRoles r JOIN AspNetUserRoles ur WHERE ur.UserId = @UserId`
+2. Tính `IsLockedOut = LockoutEnabled && LockoutEnd > UtcNow`
+
+**DTO Response:** `UserDetailResponse { Id, Email, UserName, FirstName, LastName, DateOfBirth, PhoneNumber, EmailConfirmed, IsLockedOut, LockoutEnabled, Roles[], LockoutEnd, CreatedAt, UpdatedAt }`
+
+---
+
+#### 11. PUT /api/users/{id:guid}
+
+**Controller** (`UserController.UpdateUser`)
+→ `[Authorize(Policy = "RequireAdmin")]`
+→ nhận `UpdateUserRequest { FirstName?, LastName?, PhoneNumber?, DateOfBirth? }`
+→ `mediator.Send(new UpdateUserCommand(id, ...))`
+→ `NoContent()`
+
+**Handler** (`UpdateUserCommandHandler`)
+→ Map `UpdateUserCommand` → `UpdateUserRequest`
+→ `_userRepo.UpdateUserAsync(userId, requestDto)`
+→ Nếu `!updated` → throw `NotFoundException` (sẽ được ExceptionMiddleware bắt → 404)
+
+**Repository** (`UserWriteRepository.UpdateUserAsync`)
+```sql
+UPDATE AspNetUsers
+SET FirstName = COALESCE(@FirstName, FirstName),
+    LastName = COALESCE(@LastName, LastName),
+    PhoneNumber = COALESCE(@PhoneNumber, PhoneNumber),
+    DOB = COALESCE(@DateOfBirth, DOB),
+    UpdatedAt = @Now
+WHERE Id = @UserId
+```
+→ Dùng `COALESCE` — chỉ update field được cung cấp
+
+---
+
+#### 12. POST /api/users/{id:guid}/roles
+
+**Controller** (`UserController.AssignRoles`)
+→ `[Authorize(Policy = "RequireAdmin")]`
+→ body: `string[] roles`
+→ `mediator.Send(new AssignRolesCommand(id, roles))`
+→ `NoContent()`
+
+**Validator** (`AssignRolesCommandValidator`)
+→ UserId required
+→ Roles not empty
+
+**Handler** (`AssignRolesCommandHandler`)
+→ `_userRepo.AssignRolesAsync(request.UserId, request.Roles)`
+
+**Repository** (`UserWriteRepository.AssignRolesAsync`)
+```sql
+INSERT INTO AspNetUserRoles (UserId, RoleId)
+SELECT @UserId, r.Id
+FROM AspNetRoles r
+WHERE r.Name IN @Roles
+  AND NOT EXISTS (
+      SELECT 1 FROM AspNetUserRoles ur
+      WHERE ur.UserId = @UserId AND ur.RoleId = r.Id
+  )
+```
+→ Chỉ insert roles chưa tồn tại (tránh duplicate)
+
+---
+
+#### 13. DELETE /api/users/{id:guid}/roles
+
+**Controller** (`UserController.RemoveRoles`)
+→ `[Authorize(Policy = "RequireAdmin")]`
+→ body: `string[] roles`
+→ `mediator.Send(new RemoveRolesCommand(id, roles))`
+→ `NoContent()`
+
+**Validator** (`RemoveRolesCommandValidator`)
+→ UserId required
+→ Roles not empty
+
+**Handler** (`RemoveRolesCommandHandler`)
+→ `_userRepo.RemoveRolesAsync(request.UserId, request.Roles)`
+
+**Repository** (`UserWriteRepository.RemoveRolesAsync`)
+```sql
+DELETE ur
+FROM AspNetUserRoles ur
+INNER JOIN AspNetRoles r ON r.Id = ur.RoleId
+WHERE ur.UserId = @UserId AND r.Name IN @Roles
+```
+
+---
+
+#### 14. DELETE /api/users/{id:guid}
+
+**Controller** (`UserController.LockoutUser`)
+→ `[Authorize(Policy = "RequireAdmin")]`
+→ **Không qua MediatR** (gọi thẳng repository)
+→ `_userWriteRepo.SoftDeleteUserAsync(id)`
+→ Nếu `!updated` → 404
+→ `NoContent()`
+
+**Repository** (`UserWriteRepository.SoftDeleteUserAsync`)
+```sql
+UPDATE AspNetUsers
+SET LockoutEnabled = 1,
+    LockoutEnd = @LockoutEnd,    -- DateTimeOffset.MaxValue (khóa vĩnh viễn)
+    UpdatedAt = @Now
+WHERE Id = @UserId
+```
+→ Soft delete = lockout vĩnh viễn, không xóa vật lý
+
+---
+
 ## Coding Convention (PHẢI TUÂN THEO)
 
 | Rule | Ví dụ |
 |------|-------|
 | Controller inject `IMediator` + `IUserContext` | `UserController(IMediator mediator, IUserContext ctx)` |
-| Controller dùng `result.Match(Ok, HandleFailure)` | Không còn `result.IsSuccess` thủ công |
+| Controller dùng `result.IsSuccess` + `result.Match` | AuthController: `result.IsSuccess ? Ok() : BadRequest()` — UserController: trộn cả 2 pattern |
 | Command là `sealed record` | `sealed record LoginCommand(...) : ICommand<Result<LoginResponse>>` |
 | Handler mỏng (1 dòng) | `=> await service.MethodAsync(request)` |
 | Service trả về `Result<T>` | `Result<T>.Success(value)` / `Result<T>.Fail(error)` |
@@ -109,6 +494,10 @@ TripChatRoom → TripMessage
 8. **OTP lưu trong Redis, TTL 5 phút** — key pattern: `otp:{email}`.
 9. **Token rotation bắt buộc** — refresh revokes old token.
 10. **Cookie: refreshToken (HttpOnly=true), CSRF-TOKEN (HttpOnly=false)**.
+11. **Mọi đọc/ghi DB đều qua Dapper** — EF Core chỉ dùng nội bộ cho Identity.
+12. **UserWriteRepository dùng COALESCE cho partial update** — chỉ update field được cung cấp.
+13. **ExceptionMiddleware tự động bắt `NotFoundException` → 404** — handler có thể throw thay vì return Result.
+14. **MeQuery có Redis cache (5 phút)** — cache key: `cache:me:{userId}`.
 
 ## Known Bugs Cần Tránh
 
@@ -119,6 +508,7 @@ TripChatRoom → TripMessage
 5. **Validation đăng ký ở cả Application và Infrastructure** — duplicate.
 6. **RefreshToken không có FK cascade** — orphaned records nếu user bị xóa.
 7. **Admin password hardcoded** — `"Admin@123"` trong `RoleSeeder.cs`.
+8. **ITokenService vs TokenService default expiry khác nhau** — interface: 15 ngày, implementation: 30 ngày. Cần đồng bộ.
 
 ## Feature Development Pattern (13 bước)
 
@@ -131,7 +521,7 @@ TripChatRoom → TripMessage
 6. DTO                  → Application/Features/{Module}/DTOs/{Dto}.cs
 7. Service Interface    → Application/Abstractions/Interfaces/{Module}/I{Name}Service.cs
 8. Service Impl         → Infrastructure/Services/{Module}/{Name}Service.cs
-9. Repository Impl      → Infrastructure/Persistence/Repositories/{Entity}/{Name}Repository.cs
+9. Repository Impl      → Infrastructure/Persistence/Dapper/Repositories/{Entity}/{Name}Repository.cs
 10. Controller          → WebApi/Controllers/{Name}Controller.cs
 11. DI Registration     → Infrastructure/Configuration/DependencyInjection.cs
 12. EF Config           → Infrastructure/Persistence/Entities/BuildEntities.cs
@@ -140,20 +530,22 @@ TripChatRoom → TripMessage
 
 ## DI Reference
 
-| Interface | Implementation | Lifetime |
-|-----------|---------------|----------|
-| `IMediator` | Mediator | Scoped |
-| `IIdentityService` | IdentityService | Scoped |
-| `ITokenService` | TokenService | Scoped |
-| `IAuthCookieService` | AuthCookieService | Scoped |
-| `IUserReadRepository` | UserReadRepository | Scoped |
-| `IUserWriteRepository` | UserWriteRepository | Scoped |
-| `IUserContext` | HttpUserContext | Scoped |
-| `ICacheService` | RedisCacheService | Singleton |
-| `IEmailService` | EmailService | Scoped |
-| `IEmailChecker` | EmailChecker | Scoped |
-| `IConnectionMultiplexer` | ConnectionMultiplexer | Singleton |
-| Hangfire Server | — | Singleton |
+| Interface | Implementation | Lifetime | Layer |
+|-----------|---------------|----------|-------|
+| `IMediator` | Mediator | Scoped | Application |
+| `IIdentityService` | IdentityService | Scoped | Infrastructure |
+| `ITokenService` | TokenService | Scoped | Infrastructure |
+| `IAuthCookieService` | AuthCookieService | Scoped | Infrastructure |
+| `IUserReadRepository` | UserReadRepository | Scoped | Infrastructure |
+| `IUserWriteRepository` | UserWriteRepository | Scoped | Infrastructure |
+| `IUserContext` | HttpUserContext | Scoped | Infrastructure |
+| `ICallCacheService` | CallCacheService | Scoped | Infrastructure |
+| `ICacheService` | RedisCacheService | Singleton | Infrastructure |
+| `IEmailService` | EmailService | Scoped | Infrastructure |
+| `IEmailChecker` | EmailChecker | Scoped | Infrastructure |
+| `IConnectionMultiplexer` | ConnectionMultiplexer | Singleton | Infrastructure |
+| `IDbConnectionFactory` | DbConnectionFactory | Singleton | Infrastructure |
+| Hangfire Server | — | Singleton | Infrastructure |
 
 ## Error Codes
 
@@ -166,6 +558,9 @@ ErrorCodes.OtpExpired            // "OTP_EXPIRED"
 ErrorCodes.OtpIncorrect          // "OTP_INCORRECT"
 ErrorCodes.ValidationError       // "VALIDATION_ERROR"
 ErrorCodes.GeneralError          // "GENERAL_ERROR"
+ErrorCodes.Forbidden             // "FORBIDDEN"
+ErrorCodes.Unauthorized          // "UNAUTHORIZED"
+ErrorCodes.NotFound              // "NOT_FOUND"
 ```
 
 ## Middleware Order (cố định)

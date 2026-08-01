@@ -1,6 +1,6 @@
 ﻿using AuthApi.Application.Abstractions.Interfaces.Auth;
 using AuthApi.Application.Common;
-using AuthApi.Application.Features.Auth.DTOs.ForgetPassword;
+using AuthApi.Application.Features.Auth.DTOs;
 using AuthApi.Domain.ObjectValues;
 using MediatR;
 

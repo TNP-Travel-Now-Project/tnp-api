@@ -2,8 +2,8 @@ using AuthApi.Application.Abstractions.Interfaces.Cache;
 using AuthApi.Application.Abstractions.Interfaces.Repositories;
 using AuthApi.Application.Common;
 using AuthApi.Application.Common.Security;
-using AuthApi.Application.Features.Users.DTOs;
-using AuthApi.Application.Features.Users.Queries.Me;
+using AuthApi.Application.Features.Auth.DTOs;
+using AuthApi.Application.Features.Auth.Queries.Me;
 using FluentAssertions;
 using Moq;
 

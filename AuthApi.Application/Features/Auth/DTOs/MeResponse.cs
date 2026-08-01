@@ -1,4 +1,4 @@
-namespace AuthApi.Application.Features.Users.DTOs
+namespace AuthApi.Application.Features.Auth.DTOs
 {
     public sealed record MeResponse
     {

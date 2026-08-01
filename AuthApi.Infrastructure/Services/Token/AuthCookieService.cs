@@ -33,7 +33,7 @@ namespace AuthApi.Infrastructure.Services.Token
             Path = "/"
         };
 
-        public void ClearTokens()
+        public void ClearTokenCookies()
         {
             var context = _httpContextAccessor.HttpContext;
 
@@ -47,10 +47,10 @@ namespace AuthApi.Infrastructure.Services.Token
         public string? GetAccessToken()
                 => _httpContextAccessor.HttpContext?.Request.Cookies["accessToken"];
 
-        public string? GetRefreshToken()
+        public string? GetRefreshTokenCookie()
                 => _httpContextAccessor.HttpContext?.Request.Cookies["refreshToken"];
 
-        public string? GetCSRFToken()
+        public string? GetCSRFTokenCookie()
                 => _httpContextAccessor.HttpContext?.Request.Cookies["CSRF-TOKEN"];
 
         public void SetAccessToken(string token, int minutes)
@@ -59,13 +59,13 @@ namespace AuthApi.Infrastructure.Services.Token
             _httpContextAccessor.HttpContext?.Response.Cookies.Append("accessToken", token, options);
         }
 
-        public void SetRefreshToken(string token, int days)
+        public void SetRefreshTokenCookie(string token, int days)
         {
             var options = CloneOptions(_refreshTokenOptions, DateTime.UtcNow.AddDays(days));
             _httpContextAccessor.HttpContext?.Response.Cookies.Append("refreshToken", token, options);
         }
 
-        public void SetCSRFToken(int days)
+        public void SetCSRFTokenCookie(int days)
         {
             var token = Convert.ToString(Guid.CreateVersion7())!;
 

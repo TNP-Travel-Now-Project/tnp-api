@@ -1,5 +1,4 @@
-﻿using System.Net.NetworkInformation;
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 
 namespace AuthApi.WebApi.Middlewares
 {

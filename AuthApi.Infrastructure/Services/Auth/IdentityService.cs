@@ -8,20 +8,12 @@ using AuthApi.Application.Features.Auth.Commands.RefreshToken;
 using AuthApi.Application.Features.Auth.Commands.Register;
 using AuthApi.Application.Features.Auth.Commands.ResetPassword;
 using AuthApi.Application.Features.Auth.DTOs;
-using AuthApi.Application.Features.Auth.DTOs.ForgetPassword;
-using AuthApi.Application.Features.Auth.DTOs.Login;
-using AuthApi.Application.Features.Auth.DTOs.Logout;
-using AuthApi.Application.Features.Auth.DTOs.RefreshToken;
-using AuthApi.Application.Features.Auth.DTOs.Register;
 using AuthApi.Infrastructure.Common;
 using AuthApi.Infrastructure.Identities;
 using AuthApi.Infrastructure.Services.Email;
 using Hangfire;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.Extensions.Options;
-using Microsoft.IdentityModel.Tokens;
 using StackExchange.Redis;
 using System.Data;
 using System.Security.Cryptography;
@@ -70,7 +62,7 @@ namespace AuthApi.Infrastructure.Services.Auth
                 Roles = [.. roles]
             };
 
-            var token = await _tokenService.GenerateTokensAsync(userDto, roles);
+            var token = await _tokenService.GenerateTokenServiceAsync(userDto, roles);
 
             return Result<LoginResponse>.Success(
                 new LoginResponse(
@@ -85,8 +77,8 @@ namespace AuthApi.Infrastructure.Services.Auth
 
         public async Task<Result<LogoutResponse>> LogoutAsync(LogoutCommand request)
         {
-            await _tokenService.RevokeRefreshTokenAsync();
-            _tokenHandler.ClearTokens();
+            await _tokenService.RevokeRefreshTokenServiceAsync();
+            _tokenHandler.ClearTokenCookies();
 
             return Result<LogoutResponse>.Success(
                 new LogoutResponse(Message: "Logout successful"));
@@ -94,7 +86,7 @@ namespace AuthApi.Infrastructure.Services.Auth
 
         public async Task<Result<RefreshTokenResponse>> RefeshTokenAsync(RefreshTokenCommand refresh)
         {
-            var token = await _tokenService.RefreshTokenAsync();
+            var token = await _tokenService.RefreshTokenServiceAsync();
 
             return token.AccessToken != null
                 ? Result<RefreshTokenResponse>.Success(new RefreshTokenResponse(

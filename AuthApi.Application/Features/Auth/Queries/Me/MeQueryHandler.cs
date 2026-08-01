@@ -3,9 +3,9 @@ using AuthApi.Application.Abstractions.Interfaces.Repositories;
 using AuthApi.Application.Abstractions.Messaging.Query;
 using AuthApi.Application.Common;
 using AuthApi.Application.Common.Security;
-using AuthApi.Application.Features.Users.DTOs;
+using AuthApi.Application.Features.Auth.DTOs;
 
-namespace AuthApi.Application.Features.Users.Queries.Me
+namespace AuthApi.Application.Features.Auth.Queries.Me
 {
     public class MeQueryHandler(
         IUserReadRepository _userRepo,

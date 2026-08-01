@@ -1,4 +1,4 @@
-﻿namespace AuthApi.Application.Features.Auth.DTOs.Register
+﻿namespace AuthApi.Application.Features.Auth.DTOs
 {
     public sealed record RegisterResponse(
         Guid UserId,

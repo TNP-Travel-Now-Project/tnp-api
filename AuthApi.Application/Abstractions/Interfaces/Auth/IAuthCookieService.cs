@@ -3,13 +3,13 @@
     public interface IAuthCookieService
     {
         string? GetAccessToken();
-        string? GetRefreshToken();
-        string? GetCSRFToken();
+        string? GetRefreshTokenCookie();
+        string? GetCSRFTokenCookie();
 
         void SetAccessToken(string token, int minutes);
-        void SetRefreshToken(string token, int days);
-        void SetCSRFToken(int days);
+        void SetRefreshTokenCookie(string token, int days);
+        void SetCSRFTokenCookie(int days);
 
-        void ClearTokens();
+        void ClearTokenCookies();
     }
 }

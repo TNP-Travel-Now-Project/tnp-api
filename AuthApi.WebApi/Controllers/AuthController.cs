@@ -5,28 +5,43 @@ using AuthApi.Application.Features.Auth.Commands.Register;
 using AuthApi.Application.Features.Auth.Commands.ResetPassword;
 using AuthApi.Application.Features.Auth.Commands.SendOTP;
 using AuthApi.Application.Features.Auth.Commands.VerifyEmail;
-using AuthApi.Application.Features.Auth.DTOs.Login;
-using AuthApi.Application.Features.Auth.DTOs.Logout;
-using AuthApi.Application.Features.Auth.DTOs.RefreshToken;
-using AuthApi.Application.Features.Auth.DTOs.Register;
-using AuthApi.Application.Features.Auth.DTOs.ForgetPassword;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using AuthApi.Application.Common;
+using AuthApi.Application.Features.Auth.DTOs;
+using AuthApi.Application.Features.Auth.Queries.Me;
 
 namespace AuthApi.WebApi.Controllers
 {
     [AllowAnonymous]
     [Route("api/auth"), ApiController]
-    public class AuthController(IMediator mediator) : ControllerBase
+    public class AuthController(IMediator _mediator) : ControllerBase
     {
+        [HttpGet("me")]
+        [Authorize]
+        [ProducesResponseType(typeof(MeResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status404NotFound)]
+        public async Task<ActionResult<MeResponse>> Me()
+        {
+            var result = await _mediator.Send(new MeQuery());
+
+            if (result.IsFailure && result.Error?.Code == ErrorCodes.UserNotFound)
+                return NotFound(new ApiErrorResponse(result.Error!));
+
+            return result.IsSuccess
+                ? Ok(result.Value)
+                : Unauthorized(new ApiErrorResponse(result.Error!));
+        }
+
         [HttpPost("login")]
         [ProducesResponseType(typeof(LoginResponse), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status500InternalServerError)]
         public async Task<ActionResult<LoginResponse>> Login(LoginCommand command)
         {
-            var result = await mediator.Send(command);
+            var result = await _mediator.Send(command);
 
             return result.IsSuccess
                 ? Ok(result.Value)
@@ -39,7 +54,7 @@ namespace AuthApi.WebApi.Controllers
         [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status500InternalServerError)]
         public async Task<ActionResult<RegisterResponse>> Register(RegisterCommand command)
         {
-            var result = await mediator.Send(command);
+            var result = await _mediator.Send(command);
 
             return result.IsSuccess
                 ? Created($"/api/auth/{result.Value!.UserId}", result.Value)
@@ -51,7 +66,7 @@ namespace AuthApi.WebApi.Controllers
         [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
         public async Task<ActionResult> VerifyEmail([FromQuery] Guid userId, [FromQuery] string token)
         {
-            var result = await mediator.Send(new VerifyEmailCommand(userId, token));
+            var result = await _mediator.Send(new VerifyEmailCommand(userId, token));
             return result.IsSuccess
                 ? Ok()
                 : BadRequest(new ApiErrorResponse(result.Error!));
@@ -62,7 +77,7 @@ namespace AuthApi.WebApi.Controllers
         [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
         public async Task<ActionResult<OtpResponse>> SendOTPByEmail([FromQuery] string email)
         {
-            var result = await mediator.Send(new SendOTPCommand(email));
+            var result = await _mediator.Send(new SendOTPCommand(email));
             return result.IsSuccess
                 ? Ok(result.Value)
                 : BadRequest(new ApiErrorResponse(result.Error!));
@@ -73,7 +88,7 @@ namespace AuthApi.WebApi.Controllers
         [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
         public async Task<ActionResult<NewPassResponse>> ResetPassword(ResetPasswordCommand command)
         {
-            var result = await mediator.Send(command);
+            var result = await _mediator.Send(command);
             return result.IsSuccess
                 ? Ok(result.Value)
                 : BadRequest(new ApiErrorResponse(result.Error!));
@@ -84,7 +99,7 @@ namespace AuthApi.WebApi.Controllers
         [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
         public async Task<ActionResult<RefreshTokenResponse>> RefreshToken()
         {
-            var result = await mediator.Send(new RefreshTokenCommand());
+            var result = await _mediator.Send(new RefreshTokenCommand());
             return result.IsSuccess
                 ? Ok(result.Value)
                 : BadRequest(new ApiErrorResponse(result.Error!));
@@ -95,7 +110,7 @@ namespace AuthApi.WebApi.Controllers
         [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
         public async Task<ActionResult<LogoutResponse>> Logout()
         {
-            var result = await mediator.Send(new LogoutCommand());
+            var result = await _mediator.Send(new LogoutCommand());
             return result.IsSuccess
                 ? Ok(result.Value)
                 : BadRequest(new ApiErrorResponse(result.Error!));

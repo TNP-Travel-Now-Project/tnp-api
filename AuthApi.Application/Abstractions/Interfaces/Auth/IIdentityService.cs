@@ -4,11 +4,7 @@ using AuthApi.Application.Features.Auth.Commands.Logout;
 using AuthApi.Application.Features.Auth.Commands.RefreshToken;
 using AuthApi.Application.Features.Auth.Commands.Register;
 using AuthApi.Application.Features.Auth.Commands.ResetPassword;
-using AuthApi.Application.Features.Auth.DTOs.ForgetPassword;
-using AuthApi.Application.Features.Auth.DTOs.Login;
-using AuthApi.Application.Features.Auth.DTOs.Logout;
-using AuthApi.Application.Features.Auth.DTOs.RefreshToken;
-using AuthApi.Application.Features.Auth.DTOs.Register;
+using AuthApi.Application.Features.Auth.DTOs;
 
 namespace AuthApi.Application.Abstractions.Interfaces.Auth
 {

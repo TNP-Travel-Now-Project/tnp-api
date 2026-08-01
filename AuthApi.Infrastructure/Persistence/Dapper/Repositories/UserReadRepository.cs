@@ -1,4 +1,5 @@
 using AuthApi.Application.Abstractions.Interfaces.Repositories;
+using AuthApi.Application.Features.Auth.DTOs;
 using AuthApi.Application.Features.Users.DTOs;
 using AuthApi.Infrastructure.Persistence.Connection;
 using Dapper;

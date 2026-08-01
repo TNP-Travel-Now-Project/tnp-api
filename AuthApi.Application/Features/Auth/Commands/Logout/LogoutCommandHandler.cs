@@ -1,6 +1,6 @@
 ﻿using AuthApi.Application.Abstractions.Interfaces.Auth;
 using AuthApi.Application.Common;
-using AuthApi.Application.Features.Auth.DTOs.Logout;
+using AuthApi.Application.Features.Auth.DTOs;
 using MediatR;
 
 namespace AuthApi.Application.Features.Auth.Commands.Logout

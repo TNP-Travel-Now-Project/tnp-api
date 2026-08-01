@@ -1,4 +1,4 @@
-﻿namespace AuthApi.Application.Features.Auth.DTOs.RefreshToken
+﻿namespace AuthApi.Application.Features.Auth.DTOs
 {
     public sealed record RefreshTokenResponse(
         string accessToken,

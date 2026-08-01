@@ -1,4 +1,4 @@
-﻿using AuthApi.Application.Features.Users.DTOs;
+﻿using AuthApi.Application.Features.Auth.DTOs;
 
 namespace AuthApi.Application.Abstractions.Interfaces.Cache
 {

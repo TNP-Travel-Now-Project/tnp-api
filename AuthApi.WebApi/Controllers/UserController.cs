@@ -5,7 +5,6 @@ using AuthApi.Application.Features.Users.Commands.RemoveRoles;
 using AuthApi.Application.Features.Users.Commands.UpdateUser;
 using AuthApi.Application.Features.Users.DTOs;
 using AuthApi.Application.Features.Users.Queries.GetUserById;
-using AuthApi.Application.Features.Users.Queries.Me;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -25,23 +24,6 @@ namespace AuthApi.WebApi.Controllers
         public async Task<List<UserListItemDto>> GetUsers()
         {
             return await _userRepo.GetAllUsersAsync();
-        }
-
-        [HttpGet("me")]
-        [Authorize]
-        [ProducesResponseType(typeof(MeResponse), StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status404NotFound)]
-        public async Task<ActionResult<MeResponse>> Me()
-        {
-            var result = await _mediator.Send(new MeQuery());
-
-            if (result.IsFailure && result.Error?.Code == ErrorCodes.UserNotFound)
-                return NotFound(new ApiErrorResponse(result.Error!));
-
-            return result.IsSuccess
-                ? Ok(result.Value)
-                : Unauthorized(new ApiErrorResponse(result.Error!));
         }
 
         [HttpGet("{id:guid}")]

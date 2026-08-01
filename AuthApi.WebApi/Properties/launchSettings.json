@@ -27,7 +27,7 @@
       "environmentVariables": {
         "ASPNETCORE_HTTPS_PORTS": "8081",
         "ASPNETCORE_HTTP_PORTS": "8080",
-        "ConnectionStrings__Default": "Server=host.docker.internal,1433;Database=AuthDb;User Id=sa;Password=Nhonaovay@1;TrustServerCertificate=True",
+        "ConnectionStrings__Default": "Server=host.docker.internal,1433;Database=AuthDb;User Id=sa;Password=CHANGE_ME;TrustServerCertificate=True",
         "ConnectionStrings__Redis": "host.docker.internal:6379"
       },
       "publishAllPorts": true,

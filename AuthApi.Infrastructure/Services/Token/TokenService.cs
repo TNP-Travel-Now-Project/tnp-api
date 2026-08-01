@@ -1,6 +1,5 @@
 ﻿using AuthApi.Application.Abstractions.Interfaces.Auth;
 using AuthApi.Application.Features.Auth.DTOs;
-using AuthApi.Application.Features.Auth.DTOs.Token;
 using AuthApi.Infrastructure.Common;
 using AuthApi.Infrastructure.Identities;
 using AuthApi.Infrastructure.Persistence;
@@ -21,7 +20,7 @@ namespace AuthApi.Infrastructure.Services.Token
         IOptions<AppSettings> _appSetting,
         IAuthCookieService _tokenHandler) : ITokenService
     {
-        public async Task<AuthResponse> GenerateTokensAsync(AuthUserDto user, IList<string> roles, int expiredDay = 30)
+        public async Task<AuthResponse> GenerateTokenServiceAsync(AuthUserDto user, IList<string> roles, int expiredDay = 30)
         {
             int expiredMinute = 15;
             var accessToken = GeneralJwtToken(user, roles, expired: expiredMinute);
@@ -38,8 +37,8 @@ namespace AuthApi.Infrastructure.Services.Token
             _dbContext.RefreshToken.Add(refreshTokenEntity);
             await _dbContext.SaveChangesAsync();
 
-            _tokenHandler.SetRefreshToken(token: refreshToken, days: expiredDay);
-            _tokenHandler.SetCSRFToken(days: expiredDay);
+            _tokenHandler.SetRefreshTokenCookie(token: refreshToken, days: expiredDay);
+            _tokenHandler.SetCSRFTokenCookie(days: expiredDay);
 
             return new AuthResponse(
                 AccessToken: accessToken,
@@ -81,9 +80,9 @@ namespace AuthApi.Infrastructure.Services.Token
             return Convert.ToBase64String(randomNumber);
         }
 
-        public async Task<AuthResponse> RefreshTokenAsync()
+        public async Task<AuthResponse> RefreshTokenServiceAsync()
         {
-            var refreshTokenToCookie = _tokenHandler.GetRefreshToken();
+            var refreshTokenToCookie = _tokenHandler.GetRefreshTokenCookie();
             if (refreshTokenToCookie == null)
                 throw new SecurityTokenException("Refresh token is missing");
 
@@ -101,10 +100,9 @@ namespace AuthApi.Infrastructure.Services.Token
             var roles = await _userManager.GetRolesAsync(user);
 
             refreshTokenEntity.IsRevoked = true;
-            _dbContext.RefreshToken.Update(refreshTokenEntity);
             await _dbContext.SaveChangesAsync();
 
-            return await GenerateTokensAsync(new AuthUserDto
+            return await GenerateTokenServiceAsync(new AuthUserDto
             {
                 Id = user.Id,
                 Email = user.Email ?? string.Empty,
@@ -113,9 +111,9 @@ namespace AuthApi.Infrastructure.Services.Token
             }, roles);
         }
 
-        public async Task RevokeRefreshTokenAsync()
+        public async Task RevokeRefreshTokenServiceAsync()
         {
-            string refreshTokenToCookie = _tokenHandler.GetRefreshToken()!;
+            string refreshTokenToCookie = _tokenHandler.GetRefreshTokenCookie()!;
             if (refreshTokenToCookie == null) return;
 
             var entity = await _dbContext.RefreshToken.FirstOrDefaultAsync(rt => rt.Token == refreshTokenToCookie);
