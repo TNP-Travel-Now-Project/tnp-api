@@ -10,13 +10,16 @@ using AuthApi.Application.Features.Auth.Commands.ResetPassword;
 using AuthApi.Application.Features.Auth.DTOs;
 using AuthApi.Infrastructure.Common;
 using AuthApi.Infrastructure.Identities;
+using AuthApi.Infrastructure.Persistence;
 using AuthApi.Infrastructure.Services.Email;
 using Hangfire;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using StackExchange.Redis;
 using System.Data;
 using System.Security.Cryptography;
+using System.Transactions;
 
 namespace AuthApi.Infrastructure.Services.Auth
 {
@@ -28,7 +31,8 @@ namespace AuthApi.Infrastructure.Services.Auth
         IBackgroundJobClient _jobClient,
         IOptions<AppSettings> _appSetting,
         IConnectionMultiplexer _redis,
-        IAuthCookieService _tokenHandler) : IIdentityService
+        IAuthCookieService _tokenHandler,
+        AppDbContext _dbContext) : IIdentityService
     {
         public string OTPKey { get => "otp:"; }
 
@@ -88,66 +92,83 @@ namespace AuthApi.Infrastructure.Services.Auth
         {
             var token = await _tokenService.RefreshTokenServiceAsync();
 
-            return token.AccessToken != null
-                ? Result<RefreshTokenResponse>.Success(new RefreshTokenResponse(
-                        accessToken: token.AccessToken,
-                        refreshtoken: null,
-                        expiredAt: token.AccessTokenExpiresAt))
+            if (token.Value == null || token.Value.AccessToken == null)
+                return Result<RefreshTokenResponse>.Fail(
+                    new Error(
+                        ErrorCodes.TokenRefreshError, 
+                        "Đã xảy ra lỗi trong quá trình xử lý RefreshToken"));
 
-                : Result<RefreshTokenResponse>.Fail("Occured error while RefreshToken handle");
+            return Result<RefreshTokenResponse>.Success(new RefreshTokenResponse(
+                        accessToken: token.Value.AccessToken,
+                        refreshtoken: null,
+                        expiredAt: token.Value.AccessTokenExpiresAt));
         }
 
         public async Task<Result<RegisterResponse>> RegisterAsync(RegisterCommand req)
         {
-            var db = _redis.GetDatabase();
+            //var db = _redis.GetDatabase();
 
             var user = new ApplicationUser(
+                userName: req.UserName,
                 firstName: req.FirstName,
                 lastName: req.LastName,
                 dateOfBirth: req.DateOfBirth,
-                email: req.Email,
-                userName: req.UserName);
+                email: req.Email);
 
-            var result = await _userManager.CreateAsync(user, req.Password);
-            if (!result.Succeeded)
+            using var transaction = await _dbContext.Database.BeginTransactionAsync();
+            try
             {
-                var errors = result.Errors.Select(e => e.Description).ToList();
-                return Result<RegisterResponse>.Fail(string.Join(", ", errors));
+                var result = await _userManager.CreateAsync(user, req.Password);
+                if (!result.Succeeded)
+                {
+                    await transaction.RollbackAsync();
+                    var errors = result.Errors.Select(e => e.Description).ToList();
+                    return Result<RegisterResponse>.Fail(string.Join(", ", errors));
+                }
+
+                await _userManager.AddToRoleAsync(user, "User");
+
+                var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+                if (string.IsNullOrEmpty(token))
+                {
+                    await transaction.RollbackAsync();
+                    return Result<RegisterResponse>.Fail("Failed to generate email confirmation token");
+                }
+
+                await transaction.CommitAsync();
+
+                var confirmLink =
+                $"{_appSetting.Value.FrontendUrl}/api/auth/verify-email" +
+                                                    $"?userId={user.Id}" +
+                                                    $"&token={Uri.EscapeDataString(token)}";
+
+                _jobClient.Enqueue(() =>
+                    _emailService.SendEmailAsync(
+                        user.Email!,
+                        "Verify your email",
+                        $"Click to verify: <a href='{confirmLink}'>Verify Email</a>")
+                );
+
+                // Xoa user neu nhu chua xac minh
+                _jobClient.Schedule<EmailCleanupJob>(p =>
+                    p.DeleteUnverifiedUser(user.Id),
+                    TimeSpan.FromHours(2)
+                );
+
+                return Result<RegisterResponse>.Success(
+                    new RegisterResponse(
+                    UserId: user.Id,
+                    FirstName: user.FirstName,
+                    LastName: user.LastName,
+                    UserName: user.UserName!,
+                    Email: user.Email ?? string.Empty,
+                    CreatedAt: user.CreatedAt)
+                );
             }
-
-            await _userManager.AddToRoleAsync(user, "User");
-
-            var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
-            if (string.IsNullOrEmpty(token))
-                return Result<RegisterResponse>.Fail("Failed to generate email confirmation token");
-
-            var confirmLink =
-            $"{_appSetting.Value.FrontendUrl}/api/auth/verify-email" +
-                                                $"?userId={user.Id}" +
-                                                $"&token={Uri.EscapeDataString(token)}";
-
-            _jobClient.Enqueue(() =>
-                _emailService.SendEmailAsync(
-                    user.Email!,
-                    "Verify your email",
-                    $"Click to verify: <a href='{confirmLink}'>Verify Email</a>")
-            );
-
-            // Xoa user neu nhu chua xac minh
-            _jobClient.Schedule<EmailCleanupJob>(p =>
-                p.DeleteUnverifiedUser(user.Id),
-                TimeSpan.FromHours(2)
-            );
-
-            return Result<RegisterResponse>.Success(
-                new RegisterResponse(
-                UserId: user.Id,
-                FirstName: user.FirstName,
-                LastName: user.LastName,
-                UserName: user.UserName!,
-                Email: user.Email ?? string.Empty,
-                CreatedAt: user.CreatedAt)
-            );
+            catch (Exception)
+            {
+                await transaction.RollbackAsync(); throw;
+            }
         }
 
         public async Task<Result<OtpResponse>> SendOTPAsync(string email)

@@ -1,20 +1,10 @@
 ﻿using AuthApi.Application.Abstractions.Interfaces.Auth;
 using Microsoft.AspNetCore.Http;
-using System.Linq.Expressions;
 
 namespace AuthApi.Infrastructure.Services.Token
 {
     public class AuthCookieService(IHttpContextAccessor _httpContextAccessor) : IAuthCookieService
     {
-        private static readonly CookieOptions _accessTokenOptions = new()
-        {
-            Secure = true,
-            HttpOnly = true,
-            IsEssential = true,
-            SameSite = SameSiteMode.None,
-            Path = "/"
-        };
-
         private static readonly CookieOptions _refreshTokenOptions = new()
         {
             Secure = true,
@@ -39,25 +29,15 @@ namespace AuthApi.Infrastructure.Services.Token
 
             if (context == null) return;
 
-            //context?.Response.Cookies.Delete("accessToken");
             context?.Response.Cookies.Delete("refreshToken");
             context?.Response.Cookies.Delete("CSRF-TOKEN");
         }
-
-        public string? GetAccessToken()
-                => _httpContextAccessor.HttpContext?.Request.Cookies["accessToken"];
 
         public string? GetRefreshTokenCookie()
                 => _httpContextAccessor.HttpContext?.Request.Cookies["refreshToken"];
 
         public string? GetCSRFTokenCookie()
                 => _httpContextAccessor.HttpContext?.Request.Cookies["CSRF-TOKEN"];
-
-        public void SetAccessToken(string token, int minutes)
-        {
-            var options = CloneOptions(_accessTokenOptions, DateTime.UtcNow.AddMinutes(minutes));
-            _httpContextAccessor.HttpContext?.Response.Cookies.Append("accessToken", token, options);
-        }
 
         public void SetRefreshTokenCookie(string token, int days)
         {

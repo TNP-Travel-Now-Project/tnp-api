@@ -62,8 +62,7 @@ namespace AuthApi.WebApi
 
             builder.Services.AddHttpContextAccessor();
 
-            // Nao day len prod thi them "!" cho bien isDev
-            var isDev = builder.Environment.IsDevelopment();
+            //var isDev = builder.Environment.IsDevelopment();
             var feUrl = builder.Configuration["Frontend:Url"];
 
             var connectionString = builder.Configuration.GetConnectionString("Default");
@@ -126,8 +125,6 @@ namespace AuthApi.WebApi
                 {
                     OnMessageReceived = context =>
                     {
-                        //var token = context.Request.Cookies["accessToken"]; cach luu acesstoken len cookie
-
                         var authorization = context.Request.Headers.Authorization.FirstOrDefault();
                         if (!string.IsNullOrEmpty(authorization) && authorization.StartsWith("Bearer "))
                         {
@@ -194,21 +191,23 @@ namespace AuthApi.WebApi
             #region Setup CookiePolicyOptions
             builder.Services.Configure<CookiePolicyOptions>(options =>
             {
-                options.MinimumSameSitePolicy = SameSiteMode.Unspecified;
+                options.MinimumSameSitePolicy = SameSiteMode.None;
                 options.HttpOnly = HttpOnlyPolicy.None;
                 options.OnAppendCookie = ctx =>
                 {
                     ctx.CookieOptions.SameSite = SameSiteMode.None;
-                    ctx.CookieOptions.Secure = isDev;
-                    //ctx.CookieOptions.HttpOnly = true;
+                    ctx.CookieOptions.Secure = true;
+                    ctx.CookieOptions.HttpOnly = true;
                     ctx.CookieOptions.IsEssential = true;
                     ctx.CookieOptions.Path = "/";
                 };
 
                 options.OnDeleteCookie = ctx =>
                 {
-                    ctx.CookieOptions.SameSite = SameSiteMode.None;
+                    ctx.CookieOptions.Path = "/";
                     ctx.CookieOptions.Secure = true;
+                    ctx.CookieOptions.IsEssential = true;
+                    ctx.CookieOptions.SameSite = SameSiteMode.None;
                 };
             });
             #endregion 

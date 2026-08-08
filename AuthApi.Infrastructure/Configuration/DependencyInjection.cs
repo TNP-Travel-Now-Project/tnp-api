@@ -22,6 +22,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using StackExchange.Redis;
+using System.Security.Cryptography;
 
 namespace AuthApi.Infrastructure.Configuration
 {
@@ -42,9 +43,11 @@ namespace AuthApi.Infrastructure.Configuration
             services.Configure<IdentityOptions>(options =>
             {
                 // Password
+                options.Password.RequiredLength = 8;
                 options.Password.RequireDigit = true;
                 options.Password.RequireUppercase = true;
-                options.Password.RequiredLength = 6;
+                options.Password.RequireLowercase = true;
+                options.Password.RequireNonAlphanumeric = true;
 
                 // Lockout
                 options.Lockout.AllowedForNewUsers = true;
@@ -119,13 +122,12 @@ namespace AuthApi.Infrastructure.Configuration
             services.AddSignalR()
                 .AddStackExchangeRedis(redisConnectionString);
 
-            // HANGFIRE SQL SERVER STORAGE
+            // HANGFIRE STORAGE
             services.AddHangfire(config =>
             {
                 config.SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
                          .UseSimpleAssemblyNameTypeSerializer()
                          .UseRecommendedSerializerSettings()
-                         .UseSqlServerStorage(connectionString)
                          .UseRedisStorage(redisConnectionString);
             });
 

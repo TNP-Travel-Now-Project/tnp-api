@@ -1,4 +1,5 @@
-﻿using AuthApi.Application.Features.Auth.DTOs;
+﻿using AuthApi.Application.Common;
+using AuthApi.Application.Features.Auth.DTOs;
 
 namespace AuthApi.Application.Abstractions.Interfaces.Auth
 {
@@ -8,7 +9,7 @@ namespace AuthApi.Application.Abstractions.Interfaces.Auth
             AuthUserDto user,
             IList<string> roles,
             int expiredDay = 15);
-        Task<AuthResponse> RefreshTokenServiceAsync();
+        Task<Result<AuthResponse>> RefreshTokenServiceAsync();
         Task RevokeRefreshTokenServiceAsync();
     }
 }

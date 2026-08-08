@@ -1,4 +1,5 @@
 ﻿using AuthApi.Application.Common;
+using AuthApi.Application.Common.Validation;
 using FluentValidation;
 
 namespace AuthApi.Application.Features.Auth.Commands.Register
@@ -36,13 +37,7 @@ namespace AuthApi.Application.Features.Auth.Commands.Register
                 .NotEmpty().WithMessage(ValidationMessages.DateOfBirthRequired)
                 .InclusiveBetween(minDob, maxDob).WithMessage(ValidationMessages.DateOfBirthRange);
 
-            RuleFor(x => x.Password)
-                .NotEmpty().WithMessage(ValidationMessages.FieldRequired)
-                .Length(8, 20).WithMessage(ValidationMessages.PasswordLengthRange)
-                .Matches("[A-Z]").WithMessage(ValidationMessages.PasswordRequiresUppercase)
-                .Matches("[a-z]").WithMessage(ValidationMessages.PasswordRequiresLowercase)
-                .Matches("[0-9]").WithMessage(ValidationMessages.PasswordRequiresDigit)
-                .Matches("[~!@#$%^&*()_+=?]").WithMessage(ValidationMessages.PasswordRequiresSpecial);
+            RuleFor(x => x.Password).StrongPassword();
 
             RuleFor(x => x.ConfirmPassword)
                 .NotEmpty().WithMessage(ValidationMessages.FieldRequired)

@@ -3,15 +3,8 @@ using Microsoft.AspNetCore.Identity;
 
 namespace AuthApi.Infrastructure.Services.Email
 {
-    public class EmailCleanupJob
+    public class EmailCleanupJob(UserManager<ApplicationUser> _userManager)
     {
-        private readonly UserManager<ApplicationUser> _userManager;
-
-        public EmailCleanupJob(UserManager<ApplicationUser> userManager)
-        {
-            _userManager = userManager;
-        }
-
         public async Task DeleteUnverifiedUser(Guid userId)
         {
             var user = await _userManager.FindByIdAsync(userId.ToString());
