@@ -1,5 +1,4 @@
 ﻿using AuthApi.Application.Abstractions.Interfaces.Auth;
-using AuthApi.Application.Abstractions.Interfaces.Email;
 using AuthApi.Application.Abstractions.Repositories.Email;
 using AuthApi.Application.Common;
 using AuthApi.Application.Features.Auth.Commands.Login;
@@ -8,30 +7,30 @@ using AuthApi.Application.Features.Auth.Commands.RefreshToken;
 using AuthApi.Application.Features.Auth.Commands.Register;
 using AuthApi.Application.Features.Auth.Commands.ResetPassword;
 using AuthApi.Application.Features.Auth.DTOs;
+using AuthApi.Domain.Entities.Financial;
 using AuthApi.Infrastructure.Common;
 using AuthApi.Infrastructure.Identities;
 using AuthApi.Infrastructure.Persistence;
 using AuthApi.Infrastructure.Services.Email;
 using Hangfire;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using StackExchange.Redis;
 using System.Data;
 using System.Security.Cryptography;
-using System.Transactions;
 
 namespace AuthApi.Infrastructure.Services.Auth
 {
     public class IdentityService(
         ITokenService _tokenService,
         UserManager<ApplicationUser> _userManager,
-        IEmailChecker _emailChecker,
         IEmailService _emailService,
         IBackgroundJobClient _jobClient,
         IOptions<AppSettings> _appSetting,
         IConnectionMultiplexer _redis,
         IAuthCookieService _tokenHandler,
+        ILogger<IdentityService> _logger,
         AppDbContext _dbContext) : IIdentityService
     {
         public string OTPKey { get => "otp:"; }
@@ -40,18 +39,18 @@ namespace AuthApi.Infrastructure.Services.Auth
         {
             var user = await _userManager.FindByEmailAsync(req.Email);
             if (user == null)
-                return Result<LoginResponse>.Fail(new Error(ErrorCodes.InvalidCredentials, "Invalid credentials"));
+                return Result<LoginResponse>.Fail(AuthErrors.InvalidCredentials);
 
             if (await _userManager.IsLockedOutAsync(user))
-                return Result<LoginResponse>.Fail(new Error(ErrorCodes.UserLockedOut, "User is locked"));
+                return Result<LoginResponse>.Fail(AuthErrors.UserLockedOut);
 
             if (!user.EmailConfirmed)
-                return Result<LoginResponse>.Fail(new Error(ErrorCodes.EmailNotConfirmed, "Email is not confirmed"));
+                return Result<LoginResponse>.Fail(AuthErrors.EmailNotConfirmed);
 
             if (!await _userManager.CheckPasswordAsync(user, req.Password))
             {
                 await _userManager.AccessFailedAsync(user);
-                return Result<LoginResponse>.Fail(new Error(ErrorCodes.InvalidCredentials, "Invalid credentials"));
+                return Result<LoginResponse>.Fail(AuthErrors.InvalidCredentials);
             }
 
             await _userManager.ResetAccessFailedCountAsync(user);
@@ -95,8 +94,8 @@ namespace AuthApi.Infrastructure.Services.Auth
             if (token.Value == null || token.Value.AccessToken == null)
                 return Result<RefreshTokenResponse>.Fail(
                     new Error(
-                        ErrorCodes.TokenRefreshError, 
-                        "Đã xảy ra lỗi trong quá trình xử lý RefreshToken"));
+                        ErrorCodes.TokenRefreshError,
+                        "An error occurred while processing the refresh token"));
 
             return Result<RefreshTokenResponse>.Success(new RefreshTokenResponse(
                         accessToken: token.Value.AccessToken,
@@ -123,7 +122,8 @@ namespace AuthApi.Infrastructure.Services.Auth
                 {
                     await transaction.RollbackAsync();
                     var errors = result.Errors.Select(e => e.Description).ToList();
-                    return Result<RegisterResponse>.Fail(string.Join(", ", errors));
+                    return Result<RegisterResponse>.Fail(
+                        new Error(ErrorCodes.RegistrationError, string.Join(", ", errors)));
                 }
 
                 await _userManager.AddToRoleAsync(user, "User");
@@ -132,7 +132,7 @@ namespace AuthApi.Infrastructure.Services.Auth
                 if (string.IsNullOrEmpty(token))
                 {
                     await transaction.RollbackAsync();
-                    return Result<RegisterResponse>.Fail("Failed to generate email confirmation token");
+                    return Result<RegisterResponse>.Fail(AuthErrors.TokenGenerationFailed);
                 }
 
                 await transaction.CommitAsync();
@@ -173,13 +173,16 @@ namespace AuthApi.Infrastructure.Services.Auth
 
         public async Task<Result<OtpResponse>> SendOTPAsync(string email)
         {
-            var confirm = await _userManager.FindByEmailAsync(email);
-            if (confirm == null)
-                return Result<OtpResponse>.Fail($"This email address {email} is not contain in the system");
-
-            var checkEmail = await _emailChecker.IsValidAsync(email);
-            if (!checkEmail)
-                return Result<OtpResponse>.Fail($"Email Invalid");
+            var user = await _userManager.FindByEmailAsync(email);
+            if (user == null)
+            {
+                _logger.LogWarning("SendOTP requested for unknown email {Email}", email);
+                return Result<OtpResponse>.Success(new OtpResponse
+                {
+                    Email = email,
+                    Expired = DateTime.UtcNow.AddMinutes(5)
+                });
+            }
 
             var key = $"{OTPKey}{email.ToLower()}";
             var db = _redis.GetDatabase();
@@ -196,7 +199,7 @@ namespace AuthApi.Infrastructure.Services.Auth
 
             var isRedis = await db.StringSetAsync(key, otp, expired);
             if (!isRedis)
-                return Result<OtpResponse>.Fail($"Redis Invalid");
+                return Result<OtpResponse>.Fail(AuthErrors.RedisFailure);
 
             return Result<OtpResponse>.Success(new OtpResponse
             {
@@ -212,16 +215,16 @@ namespace AuthApi.Infrastructure.Services.Auth
             var keyExist = await db.StringGetAsync(key);
 
             if (keyExist.IsNullOrEmpty)
-                return Result<NewPassResponse>.Fail("OTP expired or not found");
+                return Result<NewPassResponse>.Fail(AuthErrors.OtpExpired);
 
             if (keyExist != reset.Otp)
-                return Result<NewPassResponse>.Fail("OTP incorrect");
+                return Result<NewPassResponse>.Fail(AuthErrors.OtpIncorrect);
 
             await db.KeyDeleteAsync(key);
 
             var user = await _userManager.FindByEmailAsync(reset.Email);
             if (user == null)
-                return Result<NewPassResponse>.Fail("User not found");
+                return Result<NewPassResponse>.Fail(AuthErrors.UserNotFound);
 
             var token = await _userManager.GeneratePasswordResetTokenAsync(user);
             var newPass = await _userManager.ResetPasswordAsync(user, token, reset.NewPass);
@@ -229,7 +232,8 @@ namespace AuthApi.Infrastructure.Services.Auth
             if (!newPass.Succeeded)
             {
                 var errors = newPass?.Errors.Select(e => e.Description).ToList() ?? new List<string>();
-                return Result<NewPassResponse>.Fail(string.Join(", ", errors));
+                return Result<NewPassResponse>.Fail(
+                    new Error(ErrorCodes.ValidationError, string.Join(", ", errors)));
             }
 
             user.UpdatedAt = DateTime.UtcNow;
@@ -246,17 +250,18 @@ namespace AuthApi.Infrastructure.Services.Auth
             var user = await _userManager.FindByIdAsync(userId.ToString());
 
             if (user == null)
-                return Result<bool>.Fail("User not found");
+                return Result<bool>.Fail(AuthErrors.UserNotFound);
 
             if (string.IsNullOrEmpty(token))
-                return Result<bool>.Fail("Token is invalid");
+                return Result<bool>.Fail(AuthErrors.TokenInvalid);
 
             var confirmEmail = await _userManager.ConfirmEmailAsync(user, token);
 
             if (!confirmEmail.Succeeded)
             {
                 var errors = confirmEmail.Errors.Select(e => e.Description).ToList();
-                return Result<bool>.Fail(string.Join(", ", errors));
+                return Result<bool>.Fail(
+                    new Error(ErrorCodes.ValidationError, string.Join(", ", errors)));
             }
 
             return Result<bool>.Success(true);

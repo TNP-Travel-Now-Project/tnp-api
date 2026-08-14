@@ -1,6 +1,5 @@
 ﻿using AuthApi.Application.Abstractions.Interfaces.Auth;
 using AuthApi.Application.Abstractions.Interfaces.Cache;
-using AuthApi.Application.Abstractions.Interfaces.Email;
 using AuthApi.Application.Abstractions.Interfaces.Repositories;
 using AuthApi.Application.Abstractions.Repositories.Email;
 using AuthApi.Application.Common.Security;
@@ -83,7 +82,6 @@ namespace AuthApi.Infrastructure.Configuration
             services.AddScoped<ICallCacheService, CallCacheService>();
 
             services.AddScoped<IEmailService, EmailService>();
-            services.AddScoped<IEmailChecker, EmailChecker>();
             #endregion
 
             #region FluentValidation DI

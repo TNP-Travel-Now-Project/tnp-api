@@ -1,9 +1,11 @@
-﻿using AuthApi.Domain.Entities.Chat;
+﻿using AuthApi.Domain;
+using AuthApi.Domain.Entities.Chat;
 using AuthApi.Domain.Entities.Common;
 using AuthApi.Domain.Entities.Financial;
 using AuthApi.Domain.Entities.Travel;
 using AuthApi.Infrastructure.Identities;
 using Microsoft.EntityFrameworkCore;
+using System.Linq.Expressions;
 
 namespace AuthApi.Infrastructure.Persistence.Entities;
 
@@ -347,5 +349,21 @@ public static class BuildEntities
 
             m.HasIndex(x => new { x.TripChatRoomId, x.CreatedAt });
         });
+    }
+
+    public static void SoftDeleteEntities(this ModelBuilder builder)
+    {
+        // 1/2. Liệt kê mọi entity đã đăng ký và lọc entities implement ISoftDeletable
+        var getAllEntities = builder.Model.GetEntityTypes().Where(e => typeof(ISoftDeletable).IsAssignableFrom(e.ClrType));
+
+        foreach (var entityType in getAllEntities)
+        {
+            var param = Expression.Parameter(entityType.ClrType, "e");     // 3. Tham số "e" (kiểu của entity)
+            var prop = Expression.Property(param, nameof(ISoftDeletable.DeletedAt)); // 4. "e.DeletedAt"
+            var condition = Expression.Equal(prop, Expression.Constant(null, typeof(DateTime?))); // 5. "e.DeletedAt == null"
+            var lambda = Expression.Lambda(condition, param);              // 6. Gói thành lambda "e => e.DeletedAt == null"
+
+            builder.Entity(entityType.ClrType).HasQueryFilter(lambda);     // 7. Gắn filter cho entity
+        }
     }
 }

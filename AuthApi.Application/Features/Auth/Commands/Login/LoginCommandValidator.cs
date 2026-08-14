@@ -1,5 +1,6 @@
 ﻿using AuthApi.Application.Common;
 using AuthApi.Application.Common.Validation;
+using AuthApi.Domain.ObjectValues;
 using FluentValidation;
 
 namespace AuthApi.Application.Features.Auth.Commands.Login
@@ -10,7 +11,7 @@ namespace AuthApi.Application.Features.Auth.Commands.Login
         {
             RuleFor(p => p.Email)
                 .NotEmpty().WithMessage(ValidationMessages.FieldRequired)
-                .EmailAddress().WithMessage(ValidationMessages.EmailInvalid);
+                .Must(Email.IsValid).WithMessage(ValidationMessages.EmailInvalid);
 
             RuleFor(x => x.Password).StrongPassword();
         }

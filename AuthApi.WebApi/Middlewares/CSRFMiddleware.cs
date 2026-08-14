@@ -1,10 +1,11 @@
-﻿using Microsoft.AspNetCore.Mvc.Infrastructure;
+﻿using Microsoft.OpenApi;
 
 namespace AuthApi.WebApi.Middlewares
 {
     public class CSRFMiddleware(RequestDelegate _next)
     {
-        private string apiAuth { get; } = "/api/auth";
+        private const string apiAuth = "/api/auth";
+        private string[] bypassPaths { get; } = { $"{apiAuth}/login", $"{apiAuth}/register", $"{apiAuth}/refresh-token" };
 
         private readonly string[] SafeMethods = {
             HttpMethods.Get,
@@ -31,11 +32,14 @@ namespace AuthApi.WebApi.Middlewares
 
             var path = _context.Request.Path.Value?.ToLower();
 
-            if (!string.IsNullOrEmpty(path)
-                && path.StartsWith($"{apiAuth}/login")
-                || path.StartsWith($"{apiAuth}/register")
-                || path.StartsWith($"{apiAuth}/refresh-token")
-                || path.StartsWith($"{apiAuth}/logout"))
+            if (path == null)
+            {
+                _context.Response.StatusCode = 400;
+                await _context.Response.WriteAsync("Path requested not found");
+                return;
+            }
+
+            if (bypassPaths.Contains(path))
             {
                 await _next(_context);
                 return;

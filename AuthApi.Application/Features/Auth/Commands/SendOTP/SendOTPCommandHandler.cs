@@ -10,8 +10,10 @@ namespace AuthApi.Application.Features.Auth.Commands.SendOTP
     {
         public async Task<Result<OtpResponse>> Handle(SendOTPCommand request, CancellationToken cancellationToken)
         {
-            var email = Email.Create(request.Email);
-            return await _identities.SendOTPAsync(email.Value);
+            if (!Email.TryCreate(request.Email, out var email))
+                return Result<OtpResponse>.Fail(AuthErrors.EmailInvalid);
+
+            return await _identities.SendOTPAsync(email!.Value);
         }
     }
 }

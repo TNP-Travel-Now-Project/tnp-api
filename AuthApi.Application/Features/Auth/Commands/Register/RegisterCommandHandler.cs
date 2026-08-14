@@ -10,17 +10,10 @@ namespace AuthApi.Application.Features.Auth.Commands.Register
     {
         public async Task<Result<RegisterResponse>> Handle(RegisterCommand request, CancellationToken cancellationToken)
         {
-            var newEmail = Email.Create(request.Email);
+            if (!Email.TryCreate(request.Email, out var newEmail))
+                return Result<RegisterResponse>.Fail(AuthErrors.EmailInvalid);
 
-            var newRes = request with
-            {
-                Email = newEmail.Value,
-                FirstName = request.FirstName,
-                LastName = request.LastName,
-                UserName = request.UserName,
-                Password = request.Password,
-                PhoneNumber = request.PhoneNumber
-            };
+            var newRes = request with { Email = newEmail!.Value };
 
             return await _identities.RegisterAsync(newRes);
         }

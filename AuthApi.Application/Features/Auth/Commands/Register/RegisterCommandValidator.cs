@@ -1,5 +1,6 @@
 ﻿using AuthApi.Application.Common;
 using AuthApi.Application.Common.Validation;
+using AuthApi.Domain.ObjectValues;
 using FluentValidation;
 
 namespace AuthApi.Application.Features.Auth.Commands.Register
@@ -22,7 +23,7 @@ namespace AuthApi.Application.Features.Auth.Commands.Register
 
             RuleFor(p => p.Email)
                 .NotEmpty().WithMessage(ValidationMessages.FieldRequired)
-                .EmailAddress().WithMessage(ValidationMessages.EmailInvalid);
+                .Must(Email.IsValid).WithMessage(ValidationMessages.EmailInvalid);
 
             RuleFor(p => p.PhoneNumber)
                 .NotEmpty().WithMessage(ValidationMessages.PhoneNumberRequired)

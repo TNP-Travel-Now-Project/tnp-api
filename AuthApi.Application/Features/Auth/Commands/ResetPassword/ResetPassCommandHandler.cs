@@ -10,11 +10,12 @@ namespace AuthApi.Application.Features.Auth.Commands.ResetPassword
     {
         public async Task<Result<NewPassResponse>> Handle(ResetPasswordCommand request, CancellationToken cancellationToken)
         {
-            var email = Email.Create(request.Email);
+            if (!Email.TryCreate(request.Email, out var email))
+                return Result<NewPassResponse>.Fail(AuthErrors.EmailInvalid);
 
             var newRequest = request with
             {
-                Email = email.Value,
+                Email = email!.Value,
                 Otp = request.Otp
             };
 

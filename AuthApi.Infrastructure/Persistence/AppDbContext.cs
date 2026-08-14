@@ -1,4 +1,5 @@
-﻿using AuthApi.Domain.Entities.Chat;
+﻿using AuthApi.Domain;
+using AuthApi.Domain.Entities.Chat;
 using AuthApi.Domain.Entities.Common;
 using AuthApi.Domain.Entities.Financial;
 using AuthApi.Domain.Entities.Travel;
@@ -6,7 +7,10 @@ using AuthApi.Infrastructure.Identities;
 using AuthApi.Infrastructure.Persistence.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.EntityFrameworkCore;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices.Marshalling;
 
 namespace AuthApi.Infrastructure.Persistence;
 
@@ -52,5 +56,20 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
         builder.FinancialEntities();
         builder.TravelEntities();
         builder.ChatEntities();
+        builder.SoftDeleteEntities();
+    }
+
+    public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        foreach (var entry in ChangeTracker.Entries())
+        {
+            if (entry.State == EntityState.Deleted && entry.Entity is ISoftDeletable soft)
+            {
+                entry.State = EntityState.Modified;
+                soft.DeletedAt = DateTime.UtcNow;
+            }
+        }
+
+        return await base.SaveChangesAsync(cancellationToken);
     }
 }
