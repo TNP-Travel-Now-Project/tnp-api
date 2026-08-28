@@ -1,10 +1,11 @@
-﻿using AuthApi.Application.Abstractions.Interfaces.Repositories;
+﻿using AuthApi.Application.Abstractions.Interfaces.Repositories.User;
 using AuthApi.Application.Common;
 using AuthApi.Application.Features.Users.Commands.AssignRoles;
 using AuthApi.Application.Features.Users.Commands.RemoveRoles;
 using AuthApi.Application.Features.Users.Commands.UpdateUser;
 using AuthApi.Application.Features.Users.DTOs;
 using AuthApi.Application.Features.Users.Queries.GetUserById;
+using AuthApi.Application.Features.Users.Queries.GetUsers;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -15,15 +16,18 @@ namespace AuthApi.WebApi.Controllers
     [ApiController]
     public class UserController(
         IMediator _mediator,
-        IUserReadRepository _userRepo,
         IUserWriteRepository _userWriteRepo) : ControllerBase
     {
         [HttpGet]
         [AllowAnonymous]
         [ProducesResponseType(typeof(List<UserListItemDto>), StatusCodes.Status200OK)]
-        public async Task<List<UserListItemDto>> GetUsers()
+        public async Task<ActionResult<List<UserListItemDto>>> GetUsers()
         {
-            return await _userRepo.GetAllUsersAsync();
+            var result = await _mediator.Send(new GetAllUserQuery());
+
+            return result.IsSuccess
+                ? Ok(result.Value)
+                : BadRequest(new ApiErrorResponse(result.Error!));
         }
 
         [HttpGet("{id:guid}")]

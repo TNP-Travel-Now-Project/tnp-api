@@ -1,5 +1,5 @@
 using AuthApi.Application.Abstractions.Interfaces.Cache;
-using AuthApi.Application.Abstractions.Interfaces.Repositories;
+using AuthApi.Application.Abstractions.Interfaces.Repositories.User;
 using AuthApi.Application.Abstractions.Messaging.Query;
 using AuthApi.Application.Common;
 using AuthApi.Application.Common.Security;

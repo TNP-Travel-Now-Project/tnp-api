@@ -1,99 +1,75 @@
-using AuthApi.Application.Abstractions.Interfaces.Repositories;
+using AuthApi.Application.Abstractions.Interfaces.Repositories.User;
+using AuthApi.Application.Abstractions.Interfaces.UnitOfWork;
 using AuthApi.Application.Features.Users.DTOs;
-using AuthApi.Infrastructure.Persistence.Connection;
-using Dapper;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using System.Data;
 
 namespace AuthApi.Infrastructure.Persistence.Dapper.Repositories
 {
     internal sealed class UserWriteRepository : IUserWriteRepository
     {
-        private readonly IDbConnectionFactory _connectionFactory;
-
-        public UserWriteRepository(IDbConnectionFactory connectionFactory)
+        private readonly AppDbContext _dbContext;
+        private readonly IUnitOfWork _uow;
+        public UserWriteRepository(AppDbContext dbContext, IUnitOfWork uow)
         {
-            _connectionFactory = connectionFactory;
+            _dbContext = dbContext;
+            _uow = uow;
         }
 
-        public async Task<bool> UpdateUserAsync(Guid userId, UpdateUserRequest request, CancellationToken cancellationToken = default)
+        public async Task<bool> UpdateUserAsync(Guid userId, UpdateUserRequest req, CancellationToken cancellationToken = default)
         {
-            const string sql = @"
-                UPDATE AspNetUsers
-                SET
-                    FirstName = COALESCE(@FirstName, FirstName),
-                    LastName = COALESCE(@LastName, LastName),
-                    PhoneNumber = COALESCE(@PhoneNumber, PhoneNumber),
-                    DOB = COALESCE(@DateOfBirth, DOB),
-                    UpdatedAt = @Now
-                WHERE Id = @UserId";
+            var user = await _dbContext.Users.FindAsync(userId, cancellationToken);
+            if (user is null) return false;
 
-            using var conn = _connectionFactory.Create();
+            if (req.FirstName is not null) user.FirstName = req.FirstName;
+            if (req.LastName is not null) user.LastName = req.LastName;
+            if (req.PhoneNumber is not null) user.PhoneNumber = req.PhoneNumber;
+            if (req.DateOfBirth is not null) user.DateOfBirth = req.DateOfBirth.Value;
+            user.UpdatedAt = DateTime.UtcNow;
 
-            var rows = await conn.ExecuteAsync(
-                sql,
-                new
+            return true;
+        }
+
+        public async Task AssignRolesAsync(Guid userId, string[] rolesArr, CancellationToken cancellationToken = default)
+        {
+            var addRoles = await _dbContext.Roles
+                .Where(p => rolesArr.Contains(p.Name))
+                .Where(p => !_dbContext.UserRoles.Any(o => o.UserId == userId && o.RoleId == p.Id))
+                .Select(p => new IdentityUserRole<Guid>
                 {
                     UserId = userId,
-                    request.FirstName,
-                    request.LastName,
-                    request.PhoneNumber,
-                    request.DateOfBirth,
-                    Now = DateTime.UtcNow
-                });
+                    RoleId = p.Id
+                })
+                .ToListAsync(cancellationToken);
 
-            return rows > 0;
+            if (addRoles.Count == 0) return;
+            await _dbContext.UserRoles.AddRangeAsync(addRoles);
         }
 
-        public async Task AssignRolesAsync(Guid userId, string[] roles, CancellationToken cancellationToken = default)
+        public async Task RemoveRolesAsync(Guid userId, string[] rolesArr, CancellationToken cancellationToken = default)
         {
-            const string sql = @"
-                INSERT INTO AspNetUserRoles (UserId, RoleId)
-                SELECT @UserId, r.Id
-                FROM AspNetRoles r
-                WHERE r.Name IN @Roles
-                  AND NOT EXISTS (
-                      SELECT 1 FROM AspNetUserRoles ur
-                      WHERE ur.UserId = @UserId AND ur.RoleId = r.Id
-                  )";
+            var roleId = await _dbContext.Roles.Where(p => rolesArr.Contains(p.Name))
+                                                .Select(p => p.Id)
+                                                .ToListAsync(cancellationToken);
 
-            using var conn = _connectionFactory.Create();
-            await conn.ExecuteAsync(sql, new { UserId = userId, Roles = roles });
-        }
+            var existRoles = await _dbContext.UserRoles.Where(p => p.UserId == userId && roleId.Contains(p.RoleId))
+                                                        .ToListAsync(cancellationToken);
+            if (!existRoles.Any()) return;
 
-        public async Task RemoveRolesAsync(Guid userId, string[] roles, CancellationToken cancellationToken = default)
-        {
-            const string sql = @"
-                DELETE ur
-                FROM AspNetUserRoles ur
-                INNER JOIN AspNetRoles r ON r.Id = ur.RoleId
-                WHERE ur.UserId = @UserId
-                  AND r.Name IN @Roles";
-
-            using var conn = _connectionFactory.Create();
-            await conn.ExecuteAsync(sql, new { UserId = userId, Roles = roles });
+            _dbContext.UserRoles.RemoveRange(existRoles);
         }
 
         public async Task<bool> SoftDeleteUserAsync(Guid userId, CancellationToken cancellationToken = default)
         {
-            const string sql = @"
-                UPDATE AspNetUsers
-                SET
-                    LockoutEnabled = 1,
-                    LockoutEnd = @LockoutEnd,
-                    UpdatedAt = @Now
-                WHERE Id = @UserId";
+            var authUser = await _dbContext.Users.FindAsync(userId, cancellationToken);
+            var domainUser = await _dbContext.AppUsers.FindAsync(userId, cancellationToken);
+            if (authUser is null || domainUser is null) return false;
 
-            using var conn = _connectionFactory.Create();
+            _dbContext.AppUsers.Remove(domainUser);
+            _dbContext.Users.Remove(authUser);
 
-            var rows = await conn.ExecuteAsync(
-                sql,
-                new
-                {
-                    UserId = userId,
-                    LockoutEnd = DateTimeOffset.MaxValue,
-                    Now = DateTime.UtcNow
-                });
-
-            return rows > 0;
+            return true;
         }
     }
 }
