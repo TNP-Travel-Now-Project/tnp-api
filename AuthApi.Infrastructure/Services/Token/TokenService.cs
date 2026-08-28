@@ -1,4 +1,5 @@
 ﻿using AuthApi.Application.Abstractions.Interfaces.Auth;
+using AuthApi.Application.Abstractions.Interfaces.UnitOfWork;
 using AuthApi.Application.Common;
 using AuthApi.Application.Features.Auth.DTOs;
 using AuthApi.Infrastructure.Common;
@@ -18,6 +19,7 @@ namespace AuthApi.Infrastructure.Services.Token
 {
     public class TokenService(
         AppDbContext _dbContext,
+        IUnitOfWork _uow,
         UserManager<ApplicationUser> _userManager,
         IOptions<AppSettings> _appSetting,
         IAuthCookieService _tokenHandler) : ITokenService
@@ -37,7 +39,7 @@ namespace AuthApi.Infrastructure.Services.Token
             };
 
             _dbContext.RefreshToken.Add(refreshTokenEntity);
-            await _dbContext.SaveChangesAsync();
+            await _uow.SaveChangesAsync();
 
             _tokenHandler.SetRefreshTokenCookie(token: refreshToken, days: expiredDay);
             _tokenHandler.SetCSRFTokenCookie(days: expiredDay);
@@ -53,7 +55,7 @@ namespace AuthApi.Infrastructure.Services.Token
             var claims = new List<Claim>
             {
                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-               new Claim(ClaimTypes.Email, user.Email ?? ""),
+               new Claim(ClaimTypes.Email, user.Email ?? string.Empty),
                new Claim(ClaimTypes.Name, user.UserName),
             };
 
@@ -102,7 +104,7 @@ namespace AuthApi.Infrastructure.Services.Token
             var roles = await _userManager.GetRolesAsync(user);
 
             refreshTokenEntity.IsRevoked = true;
-            await _dbContext.SaveChangesAsync();
+            await _uow.SaveChangesAsync();
 
             return Result<AuthResponse>.Success(await GenerateTokenServiceAsync(new AuthUserDto
             {
@@ -122,7 +124,7 @@ namespace AuthApi.Infrastructure.Services.Token
             if (entity == null) return;
 
             entity.IsRevoked = true;
-            await _dbContext.SaveChangesAsync();
+            await _uow.SaveChangesAsync();
         }
     }
 }

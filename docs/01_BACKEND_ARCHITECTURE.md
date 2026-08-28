@@ -97,8 +97,6 @@ AuthApi.Domain/
 │       └── UserAgeNotValid.cs    # Kiểm tra tuổi (18-25)
 ├── Factories/
 │   └── UsersFactory.cs           # Rỗng — placeholder
-├── Interfaces/
-│   └── IUserRepository.cs        # Contract repository (domain)
 └── ObjectValues/
     └── Email.cs                  # Value object email kèm validation
 
@@ -319,7 +317,7 @@ sequenceDiagram
 | 9 | **ValidationBehavior** | Pipeline behavior của MediatR. Chạy tất cả `IValidator<TRequest>` đã đăng ký. Throw `ValidationException` nếu lỗi. |
 | 10 | **Handler** | Mỏng: inject service interface, ủy quyền ngay (thường 1 dòng). |
 | 11 | **Service** | Điều phối business logic. Dùng `UserManager`, `TokenService`, `EmailService`, `Redis`, `Hangfire`. |
-| 12 | **Database** | SQL Server (EF Core cho ghi, Dapper/SqlKata cho đọc), Redis (OTP, cache, Hangfire storage). |
+| 12 | **Database** | SQL Server (EF Core cho ghi, Dapper cho đọc), Redis (OTP, cache, Hangfire storage). |
 | 13 | **Response** | Handler trả về `Result<T>`. Controller chuyển thành HTTP response. |
 
 ---
@@ -653,8 +651,8 @@ public class AppSettings
 | **DTO** | `sealed record` hoặc POCO trong `Features/{Module}/DTOs/` | `LoginResponse`, `RegisterResponse` |
 | **Service interface** | `I{Name}Service` trong `Application/Abstractions/Interfaces/` | `IIdentityService` |
 | **Service impl** | `{Name}Service` trong `Infrastructure/Services/` | `IdentityService` |
-| **Repository interface** | `I{Entity}Repository` trong `Domain/Interfaces/` hoặc `Application/Abstractions/` | `IUserRepository`, `IUserQueryRepository` |
-| **Repository impl** | `{Entity}Repository` trong `Infrastructure/Persistence/Repositories/` | `UserRepository` |
+| **Repository interface** | `I{Name}Repository` trong `Application/Abstractions/Interfaces/Repositories/` | `IUserReadRepository`, `IUserWriteRepository` |
+| **Repository impl** | `{Name}Repository` trong `Infrastructure/Persistence/Dapper/Repositories/` | `UserReadRepository`, `UserWriteRepository` |
 | **Entity** | Kế thừa `BaseEntity`, trong `Domain/Entities/` | `Users : BaseEntity, IAggregateRoot` |
 | **Value Object** | Record hoặc class implement `IValueObject` | `Email` |
 | **Enum** | Trong `Domain/Enums/` | `UserRole { User, Admin, Guest }` |

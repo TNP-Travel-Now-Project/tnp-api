@@ -2,7 +2,7 @@
 
 ## Tổng Quan
 
-Dự án sử dụng **SQL Server** (qua `Microsoft.EntityFrameworkCore.SqlServer` / `Microsoft.Data.SqlClient`) làm database chính và **Redis** cho caching/token lưu trữ tạm. ORM chính là **Entity Framework Core 10** (cho thao tác ghi) kết hợp **Dapper + SqlKata** (cho thao tác đọc).
+Dự án sử dụng **SQL Server** (qua `Microsoft.EntityFrameworkCore.SqlServer` / `Microsoft.Data.SqlClient`) làm database chính và **Redis** cho caching/token lưu trữ tạm. ORM chính là **Entity Framework Core 10** (cho thao tác ghi) kết hợp **Dapper** (cho thao tác đọc).
 
 **Database gồm 3 trạng thái entity:**
 1. **Đã migrate** — bảng tồn tại trong database (Identity + RefreshToken)
