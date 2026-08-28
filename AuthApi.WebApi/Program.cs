@@ -1,3 +1,4 @@
+using AuthApi.Application.Common;
 using AuthApi.Application.Configuration;
 using AuthApi.Infrastructure.Common;
 using AuthApi.Infrastructure.Configuration;
@@ -19,6 +20,7 @@ using HealthChecks.UI.Client;
 using Microsoft.OpenApi;
 using Serilog;
 using System.Text;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace AuthApi.WebApi
 {
@@ -46,7 +48,7 @@ namespace AuthApi.WebApi
                 Log.Fatal(ex, "Application terminated unexpectedly");
             }
             finally
-            {
+           {
                 await Log.CloseAndFlushAsync();
             }
         }
@@ -93,6 +95,50 @@ namespace AuthApi.WebApi
                               .AllowCredentials();
                     });
             });
+            #endregion
+
+            #region Rate Limiting
+            builder.Services.Configure<RateLimitingOptions>(
+                builder.Configuration.GetSection("RateLimiting"));
+
+            builder.Services.AddRateLimiter(options =>
+            {
+                var rlOptions = builder.Configuration
+                    .GetSection("RateLimiting")
+                    .Get<RateLimitingOptions>() ?? new RateLimitingOptions();
+
+                // Auth policy: login, register
+                options.AddFixedWindowLimiter("auth", opt =>
+                {
+                    opt.PermitLimit = rlOptions.Auth.PermitLimit;
+                    opt.Window = TimeSpan.FromMinutes(rlOptions.Auth.WindowMinutes);
+                    opt.QueueLimit = rlOptions.Auth.QueueLimit;
+                });
+
+                // Refresh policy: refresh-token
+                options.AddFixedWindowLimiter("refresh", opt =>
+                {
+                    opt.PermitLimit = rlOptions.Refresh.PermitLimit;
+                    opt.Window = TimeSpan.FromMinutes(rlOptions.Refresh.WindowMinutes);
+                    opt.QueueLimit = rlOptions.Refresh.QueueLimit;
+                });
+
+                // Custom 429 response
+                options.OnRejected = async (context, token) =>
+                {
+                    context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+                    var retryAfter = rlOptions.Auth.WindowMinutes * 60;
+                    context.HttpContext.Response.Headers.RetryAfter = retryAfter.ToString();
+
+                    await context.HttpContext.Response.WriteAsJsonAsync(new
+                    {
+                        error = "Too Many Requests",
+                        message = "Quá nhiều yêu cầu. Vui lòng thử lại sau.",
+                        retryAfterSeconds = retryAfter
+                    }, cancellationToken: token);
+                };
+            });
+
             #endregion
 
             #region Config JWT
@@ -285,6 +331,8 @@ namespace AuthApi.WebApi
             });
 
             app.UseCors("AllowNextJS");
+
+            app.UseRateLimiter();
 
             app.UseHttpsRedirection();
 

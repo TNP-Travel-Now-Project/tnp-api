@@ -8,6 +8,7 @@ using AuthApi.Application.Features.Auth.Commands.VerifyEmail;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using AuthApi.Application.Common;
 using AuthApi.Application.Features.Auth.DTOs;
 using AuthApi.Application.Features.Auth.Queries.Me;
@@ -18,8 +19,7 @@ namespace AuthApi.WebApi.Controllers
     [Route("api/auth"), ApiController]
     public class AuthController(IMediator _mediator) : ControllerBase
     {
-        [HttpGet("me")]
-        [Authorize]
+        [Authorize, HttpGet("me")]
         [ProducesResponseType(typeof(MeResponse), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status404NotFound)]
@@ -36,6 +36,7 @@ namespace AuthApi.WebApi.Controllers
         }
 
         [HttpPost("login")]
+        [EnableRateLimiting("auth")]
         [ProducesResponseType(typeof(LoginResponse), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status500InternalServerError)]
@@ -49,6 +50,7 @@ namespace AuthApi.WebApi.Controllers
         }
 
         [HttpPost("register")]
+        [EnableRateLimiting("auth")]
         [ProducesResponseType(typeof(RegisterResponse), StatusCodes.Status201Created)]
         [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status500InternalServerError)]
@@ -95,6 +97,7 @@ namespace AuthApi.WebApi.Controllers
         }
 
         [HttpPost("refresh-token")]
+        [EnableRateLimiting("refresh")]
         [ProducesResponseType(typeof(RefreshTokenResponse), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
         public async Task<ActionResult<RefreshTokenResponse>> RefreshToken()

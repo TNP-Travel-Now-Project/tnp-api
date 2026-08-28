@@ -40,4 +40,6 @@
 	  <ProjectReference Include="..\AuthApi.Infrastructure\AuthApi.Infrastructure.csproj" />
 	</ItemGroup>
 
+	<ProjectExtensions><VisualStudio><UserProperties appsettings_1json__JsonSchema="https://acp-protocol.dev/schemas/v1/cache.schema.json" /></VisualStudio></ProjectExtensions>
+
 </Project>
