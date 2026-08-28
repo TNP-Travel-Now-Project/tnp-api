@@ -7,15 +7,16 @@ using AuthApi.Infrastructure.Identities;
 using AuthApi.Infrastructure.Persistence.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.EntityFrameworkCore;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices.Marshalling;
+using System.Data.Common;
 
 namespace AuthApi.Infrastructure.Persistence;
 
 public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>
 {
+    public DbConnection Connection => Database.GetDbConnection();
+
+    private readonly HashSet<object> _forceHardDelete = new();
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
     public DbSet<RefreshToken> RefreshToken { get; set; } = null!;
@@ -59,17 +60,26 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
         builder.SoftDeleteEntities();
     }
 
+    public void HardDelete<T>(T entity) where T : class, ISoftDeletable
+    {
+        _forceHardDelete.Add(entity);
+        Entry(entity).State = EntityState.Deleted;
+    }
+
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         foreach (var entry in ChangeTracker.Entries())
         {
-            if (entry.State == EntityState.Deleted && entry.Entity is ISoftDeletable soft)
+            if (entry.State == EntityState.Deleted
+                && entry.Entity is ISoftDeletable soft
+                && !_forceHardDelete.Contains(entry.Entity))
             {
                 entry.State = EntityState.Modified;
                 soft.DeletedAt = DateTime.UtcNow;
             }
         }
 
+        _forceHardDelete.Clear();
         return await base.SaveChangesAsync(cancellationToken);
     }
 }
