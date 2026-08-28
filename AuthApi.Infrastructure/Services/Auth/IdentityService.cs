@@ -1,4 +1,5 @@
 ﻿using AuthApi.Application.Abstractions.Interfaces.Auth;
+using AuthApi.Application.Abstractions.Interfaces.UnitOfWork;
 using AuthApi.Application.Abstractions.Repositories.Email;
 using AuthApi.Application.Common;
 using AuthApi.Application.Features.Auth.Commands.Login;
@@ -7,7 +8,8 @@ using AuthApi.Application.Features.Auth.Commands.RefreshToken;
 using AuthApi.Application.Features.Auth.Commands.Register;
 using AuthApi.Application.Features.Auth.Commands.ResetPassword;
 using AuthApi.Application.Features.Auth.DTOs;
-using AuthApi.Domain.Entities.Financial;
+using AuthApi.Domain.Entities.Common;
+using AuthApi.Domain.Enums;
 using AuthApi.Infrastructure.Common;
 using AuthApi.Infrastructure.Identities;
 using AuthApi.Infrastructure.Persistence;
@@ -31,9 +33,23 @@ namespace AuthApi.Infrastructure.Services.Auth
         IConnectionMultiplexer _redis,
         IAuthCookieService _tokenHandler,
         ILogger<IdentityService> _logger,
+        IUnitOfWork _uow,
         AppDbContext _dbContext) : IIdentityService
     {
         public string OTPKey { get => "otp:"; }
+
+        private static string MapIdentityErrorToField(string code) => code switch
+        {
+            "PasswordTooShort" or "PasswordRequiresDigit" or "PasswordRequiresLower"
+                or "PasswordRequiresUpper" or "PasswordRequiresNonAlphanumeric"
+                or "PasswordMismatch" or "UserAlreadyHasPassword" => "Password",
+
+            "DuplicateEmail" or "InvalidEmail" => "Email",
+
+            "DuplicateUserName" or "InvalidUserName" => "UserName",
+
+            _ => "General"
+        };
 
         public async Task<Result<LoginResponse>> LoginAsync(LoginCommand req)
         {
@@ -105,8 +121,6 @@ namespace AuthApi.Infrastructure.Services.Auth
 
         public async Task<Result<RegisterResponse>> RegisterAsync(RegisterCommand req)
         {
-            //var db = _redis.GetDatabase();
-
             var user = new ApplicationUser(
                 userName: req.UserName,
                 firstName: req.FirstName,
@@ -121,9 +135,11 @@ namespace AuthApi.Infrastructure.Services.Auth
                 if (!result.Succeeded)
                 {
                     await transaction.RollbackAsync();
-                    var errors = result.Errors.Select(e => e.Description).ToList();
+                    var errors = result.Errors
+                        .GroupBy(e => MapIdentityErrorToField(e.Code))
+                        .ToDictionary(g => g.Key, g => g.Select(e => new FieldError(e.Code, e.Description)).ToArray());
                     return Result<RegisterResponse>.Fail(
-                        new Error(ErrorCodes.RegistrationError, string.Join(", ", errors)));
+                        new Error(ErrorCodes.RegistrationError, "Registration failed", errors));
                 }
 
                 await _userManager.AddToRoleAsync(user, "User");
@@ -135,8 +151,15 @@ namespace AuthApi.Infrastructure.Services.Auth
                     return Result<RegisterResponse>.Fail(AuthErrors.TokenGenerationFailed);
                 }
 
+                // Lay userId cua bang userAuth -> luu user business logic xuong db
+                var userName = user.UserName ?? string.Empty;
+                var domainUser = Users.Create(user.Id, UserRole.User, userName);
+                await _dbContext.AppUsers.AddAsync(domainUser);
+                await _uow.SaveChangesAsync();
+
                 await transaction.CommitAsync();
 
+                // Gui email xac minh
                 var confirmLink =
                 $"{_appSetting.Value.FrontendUrl}/api/auth/verify-email" +
                                                     $"?userId={user.Id}" +
@@ -231,9 +254,11 @@ namespace AuthApi.Infrastructure.Services.Auth
 
             if (!newPass.Succeeded)
             {
-                var errors = newPass?.Errors.Select(e => e.Description).ToList() ?? new List<string>();
+                var errors = newPass.Errors
+                    .GroupBy(e => MapIdentityErrorToField(e.Code))
+                    .ToDictionary(g => g.Key, g => g.Select(e => new FieldError(e.Code, e.Description)).ToArray());
                 return Result<NewPassResponse>.Fail(
-                    new Error(ErrorCodes.ValidationError, string.Join(", ", errors)));
+                    new Error(ErrorCodes.ValidationError, "Password reset failed", errors));
             }
 
             user.UpdatedAt = DateTime.UtcNow;
@@ -259,9 +284,11 @@ namespace AuthApi.Infrastructure.Services.Auth
 
             if (!confirmEmail.Succeeded)
             {
-                var errors = confirmEmail.Errors.Select(e => e.Description).ToList();
+                var errors = confirmEmail.Errors
+                    .GroupBy(e => MapIdentityErrorToField(e.Code))
+                    .ToDictionary(g => g.Key, g => g.Select(e => new FieldError(e.Code, e.Description)).ToArray());
                 return Result<bool>.Fail(
-                    new Error(ErrorCodes.ValidationError, string.Join(", ", errors)));
+                    new Error(ErrorCodes.ValidationError, "Email verification failed", errors));
             }
 
             return Result<bool>.Success(true);

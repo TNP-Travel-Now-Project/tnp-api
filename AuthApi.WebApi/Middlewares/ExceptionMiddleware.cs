@@ -49,7 +49,7 @@ namespace AuthApi.WebApi.Middlewares
                     .GroupBy(e => e.PropertyName)
                     .ToDictionary(
                         g => g.Key,
-                        g => g.Select(e => e.ErrorMessage).ToArray()
+                        g => g.Select(e => new FieldError(e.ErrorCode, e.ErrorMessage)).ToArray()
                     );
 
                 var response = new ApiErrorResponse

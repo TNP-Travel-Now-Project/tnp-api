@@ -1,6 +1,7 @@
 ﻿using AuthApi.Application.Abstractions.Interfaces.Auth;
 using AuthApi.Application.Abstractions.Interfaces.Cache;
-using AuthApi.Application.Abstractions.Interfaces.Repositories;
+using AuthApi.Application.Abstractions.Interfaces.Repositories.User;
+using AuthApi.Application.Abstractions.Interfaces.UnitOfWork;
 using AuthApi.Application.Abstractions.Repositories.Email;
 using AuthApi.Application.Common.Security;
 using AuthApi.Application.Features.Auth.Commands.Register;
@@ -16,12 +17,10 @@ using FluentValidation;
 using Hangfire;
 using Hangfire.Redis.StackExchange;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using StackExchange.Redis;
-using System.Security.Cryptography;
 
 namespace AuthApi.Infrastructure.Configuration
 {
@@ -64,14 +63,18 @@ namespace AuthApi.Infrastructure.Configuration
             {
                 ops.SignIn.RequireConfirmedEmail = true;
 
-            }).AddRoles<IdentityRole<Guid>>()
-              .AddEntityFrameworkStores<AppDbContext>()
-              .AddDefaultTokenProviders();
+            })
+            .AddErrorDescriber<CustomIdentityErrorDescriber>()
+            .AddRoles<IdentityRole<Guid>>()
+            .AddEntityFrameworkStores<AppDbContext>()
+            .AddDefaultTokenProviders();
             #endregion
 
             #region Service DI
             services.AddScoped<IUserReadRepository, UserReadRepository>();
             services.AddScoped<IUserWriteRepository, UserWriteRepository>();
+
+            services.AddScoped<IUnitOfWork, UnitOfWork>();
 
             services.AddScoped<ITokenService, TokenService>();
             services.AddScoped<IIdentityService, IdentityService>();
