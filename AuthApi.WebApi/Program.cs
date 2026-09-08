@@ -243,7 +243,7 @@ namespace AuthApi.WebApi
                 {
                     ctx.CookieOptions.SameSite = SameSiteMode.None;
                     ctx.CookieOptions.Secure = true;
-                    ctx.CookieOptions.HttpOnly = true;
+                    //ctx.CookieOptions.HttpOnly = true;
                     ctx.CookieOptions.IsEssential = true;
                     ctx.CookieOptions.Path = "/";
                 };
@@ -264,13 +264,13 @@ namespace AuthApi.WebApi
             builder.Services.AddSwaggerGen(options =>
             {
                 options.SwaggerDoc("v1", new OpenApiInfo
-
                 {
                     Title = "Travel Now API",
                     Version = "v1",
                     Description = "ASP.NET Core Web API với Google OAuth + JWT Bearer"
                 });
 
+                // JWT
                 options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
                 {
                     Name = "Authorization",
@@ -278,13 +278,31 @@ namespace AuthApi.WebApi
                     Scheme = "Bearer",
                     BearerFormat = "JWT",
                     In = ParameterLocation.Header,
-                    Description = "Nhập JWT token theo định dạng: Bearer {token}\nVí dụ: Bearer eyJhbGciOiJIUzI1NiIs..."
+                    Description = "Nhập JWT token theo định dạng: Bearer {token}"
                 });
 
-                options.AddSecurityRequirement(document => new OpenApiSecurityRequirement
+                // CSRF
+                options.AddSecurityDefinition("CSRF", new OpenApiSecurityScheme
                 {
-                    [new OpenApiSecuritySchemeReference("Bearer", document)] = []
+                    Name = "X-CSRF-TOKEN",
+                    Type = SecuritySchemeType.ApiKey,
+                    In = ParameterLocation.Header,
+                    Description = "Nhập CSRF token"
                 });
+
+                // JWT requirement
+                options.AddSecurityRequirement(document =>
+                    new OpenApiSecurityRequirement
+                    {
+                        [new OpenApiSecuritySchemeReference("Bearer", document)] = []
+                    });
+
+                // CSRF requirement
+                options.AddSecurityRequirement(document =>
+                    new OpenApiSecurityRequirement
+                    {
+                        [new OpenApiSecuritySchemeReference("CSRF", document)] = []
+                    });
             });
             #endregion
 
