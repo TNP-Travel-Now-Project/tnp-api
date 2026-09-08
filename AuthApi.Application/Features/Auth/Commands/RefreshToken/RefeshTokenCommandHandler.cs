@@ -5,11 +5,11 @@ using MediatR;
 
 namespace AuthApi.Application.Features.Auth.Commands.RefreshToken
 {
-    public class RefeshTokenCommandHandler(IIdentityService _identities) : IRequestHandler<RefreshTokenCommand, Result<RefreshTokenResponse>>
+    public class RefeshTokenCommandHandler(IIdentityService _services) : IRequestHandler<RefreshTokenCommand, Result<RefreshTokenResponse>>
     {
         public async Task<Result<RefreshTokenResponse>> Handle(RefreshTokenCommand request, CancellationToken cancellationToken)
         {
-            return await _identities.RefeshTokenAsync(request);
+            return await _services.RefeshTokenAsync(request);
         }
     }
 }

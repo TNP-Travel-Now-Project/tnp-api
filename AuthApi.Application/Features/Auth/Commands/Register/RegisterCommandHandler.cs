@@ -6,7 +6,7 @@ using AuthApi.Domain.ObjectValues;
 
 namespace AuthApi.Application.Features.Auth.Commands.Register
 {
-    public class RegisterCommandHandler(IIdentityService _identities) : ICommandHandler<RegisterCommand, Result<RegisterResponse>>
+    public class RegisterCommandHandler(IIdentityService _services) : ICommandHandler<RegisterCommand, Result<RegisterResponse>>
     {
         public async Task<Result<RegisterResponse>> Handle(RegisterCommand request, CancellationToken cancellationToken)
         {
@@ -15,7 +15,7 @@ namespace AuthApi.Application.Features.Auth.Commands.Register
 
             var newRes = request with { Email = newEmail!.Value };
 
-            return await _identities.RegisterAsync(newRes);
+            return await _services.RegisterAsync(newRes);
         }
     }
 }

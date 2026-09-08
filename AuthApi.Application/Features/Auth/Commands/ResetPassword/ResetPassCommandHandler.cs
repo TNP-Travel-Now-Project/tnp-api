@@ -6,7 +6,7 @@ using MediatR;
 
 namespace AuthApi.Application.Features.Auth.Commands.ResetPassword
 {
-    public class ResetPassCommandHandler(IIdentityService _identities) : IRequestHandler<ResetPasswordCommand, Result<NewPassResponse>>
+    public class ResetPassCommandHandler(IIdentityService _services) : IRequestHandler<ResetPasswordCommand, Result<NewPassResponse>>
     {
         public async Task<Result<NewPassResponse>> Handle(ResetPasswordCommand request, CancellationToken cancellationToken)
         {
@@ -19,7 +19,7 @@ namespace AuthApi.Application.Features.Auth.Commands.ResetPassword
                 Otp = request.Otp
             };
 
-            return await _identities.SetNewPassAsync(newRequest);
+            return await _services.SetNewPassAsync(newRequest);
         }
     }
 }
