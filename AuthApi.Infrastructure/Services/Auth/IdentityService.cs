@@ -14,6 +14,7 @@ using AuthApi.Infrastructure.Common;
 using AuthApi.Infrastructure.Identities;
 using AuthApi.Infrastructure.Persistence;
 using AuthApi.Infrastructure.Services.Email;
+using Google.Apis.Auth;
 using Hangfire;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
@@ -50,6 +51,93 @@ namespace AuthApi.Infrastructure.Services.Auth
 
             _ => "General"
         };
+
+        public async Task<Result<LoginResponse>> GoogleLoginAsync(string tokenId, CancellationToken cancellationToken)
+        {
+            GoogleJsonWebSignature.Payload payload;
+            try
+            {
+                var settings = new GoogleJsonWebSignature.ValidationSettings
+                {
+                    Audience = new[] { _appSetting.Value.GoogleClientId }
+                };
+
+                payload = await GoogleJsonWebSignature.ValidateAsync(tokenId, settings);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Google token validation failed");
+                return Result<LoginResponse>.Fail(AuthErrors.InvalidCredentials);
+            }
+
+
+            if (!payload.EmailVerified)
+                return Result<LoginResponse>.Fail(AuthErrors.EmailNotConfirmed);
+
+            var loginInfo = new UserLoginInfo("Google", payload.Subject, "Google");
+            var user = await _userManager.FindByLoginAsync("Google", payload.Subject);
+
+            if (user == null)
+            {
+                user = await _userManager.FindByEmailAsync(payload.Email);
+
+                if (user != null)
+                {
+                    await _userManager.AddLoginAsync(user, loginInfo);
+                }
+                else
+                {
+                    user = new ApplicationUser
+                    {
+                        UserName = payload.Email,
+                        Email = payload.Email,
+                        FirstName = payload.GivenName ?? string.Empty,
+                        LastName = payload.FamilyName ?? string.Empty,
+                        EmailConfirmed = true
+                    };
+
+                    var createResult = await _userManager.CreateAsync(user);
+                    if (!createResult.Succeeded)
+                    {
+                        var errors = createResult.Errors
+                            .GroupBy(e => MapIdentityErrorToField(e.Code))
+                            .ToDictionary(g => g.Key, g => g.Select(e => new FieldError(e.Code, e.Description)).ToArray());
+                        return Result<LoginResponse>.Fail(
+                            new Error(ErrorCodes.RegistrationError, "Failed to create user from Google", errors));
+                    }
+
+                    await _userManager.AddLoginAsync(user, loginInfo);
+                    await _userManager.AddToRoleAsync(user, "User");
+
+                    var userName = user.UserName ?? string.Empty;
+                    var domainUser = Users.Create(user.Id, UserRole.User, userName);
+                    await _dbContext.AppUsers.AddAsync(domainUser);
+                    await _uow.SaveChangesAsync(cancellationToken);
+                }
+            }
+
+            var roles = await _userManager.GetRolesAsync(user);
+
+            var userDto = new AuthUserDto
+            {
+                Id = user.Id,
+                Email = user.Email ?? string.Empty,
+                UserName = user.UserName!,
+                Roles = [.. roles]
+            };
+
+            var token = await _tokenService.GenerateTokenServiceAsync(userDto, roles);
+
+            return Result<LoginResponse>.Success(
+                new LoginResponse(
+                    accessToken: token.AccessToken,
+                    refreshToken: null,
+                    expired: token.AccessTokenExpiresAt,
+                    userId: user.Id,
+                    email: user.Email!,
+                    roles: [.. roles])
+            );
+        }
 
         public async Task<Result<LoginResponse>> LoginAsync(LoginCommand req)
         {

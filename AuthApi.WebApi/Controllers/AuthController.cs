@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using AuthApi.Application.Common;
 using AuthApi.Application.Features.Auth.DTOs;
 using AuthApi.Application.Features.Auth.Queries.Me;
+using AuthApi.Application.Features.Auth.Commands.GoogleLogin;
 
 namespace AuthApi.WebApi.Controllers
 {
@@ -44,6 +45,18 @@ namespace AuthApi.WebApi.Controllers
         {
             var result = await _mediator.Send(command);
 
+            return result.IsSuccess
+                ? Ok(result.Value)
+                : BadRequest(new ApiErrorResponse(result.Error!));
+        }
+
+        [AllowAnonymous, HttpPost("google-login")]
+        [ProducesResponseType(typeof(LoginResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status500InternalServerError)]
+        public async Task<ActionResult<LoginResponse>> GoogleLogin(GoogleLoginCommand command)
+        {
+            var result = await _mediator.Send(command);
             return result.IsSuccess
                 ? Ok(result.Value)
                 : BadRequest(new ApiErrorResponse(result.Error!));

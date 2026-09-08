@@ -5,7 +5,7 @@ namespace AuthApi.WebApi.Middlewares
     public class CSRFMiddleware(RequestDelegate _next)
     {
         private const string apiAuth = "/api/auth";
-        private string[] bypassPaths { get; } = { $"{apiAuth}/login", $"{apiAuth}/register", $"{apiAuth}/refresh-token" };
+        private string[] bypassPaths { get; } = { $"{apiAuth}/login", $"{apiAuth}/register", $"{apiAuth}/refresh-token", $"{apiAuth}/google-login" };
 
         private readonly string[] SafeMethods = {
             HttpMethods.Get,

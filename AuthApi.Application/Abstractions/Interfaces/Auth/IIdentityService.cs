@@ -1,4 +1,5 @@
 ﻿using AuthApi.Application.Common;
+using AuthApi.Application.Features.Auth.Commands.GoogleLogin;
 using AuthApi.Application.Features.Auth.Commands.Login;
 using AuthApi.Application.Features.Auth.Commands.Logout;
 using AuthApi.Application.Features.Auth.Commands.RefreshToken;
@@ -11,6 +12,7 @@ namespace AuthApi.Application.Abstractions.Interfaces.Auth
     public interface IIdentityService
     {
         Task<Result<LoginResponse>> LoginAsync(LoginCommand request);
+        Task<Result<LoginResponse>> GoogleLoginAsync(string tokenId, CancellationToken cancellationToken = default);
         Task<Result<LogoutResponse>> LogoutAsync(LogoutCommand request);
         Task<Result<RegisterResponse>> RegisterAsync(RegisterCommand request);
         Task<Result<bool>> VerifyEmailAsync(Guid userId, string token);

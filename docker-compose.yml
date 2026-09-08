@@ -25,6 +25,7 @@ services:
       - AppSettings__JwtKey=${JWT_KEY}
       - AppSettings__JwtIssuer=${JWT_ISSUER:-TravelNow}
       - AppSettings__JwtAudience=${JWT_AUDIENCE:-TravelNowApp}
+      - AppSettings__GoogleClientId=${GOOGLE_CLIENT_ID:-xxx.apps.googleusercontent.com}
       - Frontend__Url=${FRONTEND_URL:-http://localhost:3000}
     restart: unless-stopped
 
