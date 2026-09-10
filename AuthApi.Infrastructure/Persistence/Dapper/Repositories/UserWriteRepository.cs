@@ -69,9 +69,10 @@ namespace AuthApi.Infrastructure.Persistence.Dapper.Repositories
             var domainUser = await _dbContext.AppUsers.FindAsync(userId, cancellationToken);
             if (authUser is null || domainUser is null) return false;
 
-            _dbContext.AppUsers.Remove(domainUser);
-            _dbContext.Users.Remove(authUser);
+            domainUser.DeletedAt = DateTime.UtcNow;
+            authUser.LockoutEnd = DateTimeOffset.MaxValue;
 
+            await _uow.SaveChangesAsync(cancellationToken);
             return true;
         }
     }
