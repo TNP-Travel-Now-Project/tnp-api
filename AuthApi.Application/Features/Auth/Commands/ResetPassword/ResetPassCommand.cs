@@ -4,7 +4,7 @@ using AuthApi.Application.Features.Auth.DTOs;
 
 namespace AuthApi.Application.Features.Auth.Commands.ResetPassword
 {
-    public sealed record ResetPasswordCommand(
+    public sealed record ResetPassCommand(
         string Email,
         string Otp,
         string NewPass) : ICommand<Result<NewPassResponse>>;

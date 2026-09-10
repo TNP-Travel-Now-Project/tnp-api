@@ -4,7 +4,6 @@ using AuthApi.Application.Abstractions.Interfaces.Repositories.User;
 using AuthApi.Application.Abstractions.Interfaces.UnitOfWork;
 using AuthApi.Application.Abstractions.Repositories.Email;
 using AuthApi.Application.Common.Security;
-using AuthApi.Application.Features.Auth.Commands.Register;
 using AuthApi.Infrastructure.Identities;
 using AuthApi.Infrastructure.Persistence;
 using AuthApi.Infrastructure.Persistence.Connection;
@@ -13,7 +12,6 @@ using AuthApi.Infrastructure.Services.Auth;
 using AuthApi.Infrastructure.Services.Cache;
 using AuthApi.Infrastructure.Services.Email;
 using AuthApi.Infrastructure.Services.Token;
-using FluentValidation;
 using Hangfire;
 using Hangfire.Redis.StackExchange;
 using Microsoft.AspNetCore.Identity;
@@ -85,10 +83,6 @@ namespace AuthApi.Infrastructure.Configuration
             services.AddScoped<ICallCacheService, CallCacheService>();
 
             services.AddScoped<IEmailService, EmailService>();
-            #endregion
-
-            #region FluentValidation DI
-            services.AddValidatorsFromAssemblyContaining<RegisterCommandValidator>();
             #endregion
 
             #region Redis Config

@@ -1,21 +1,28 @@
-﻿using AuthApi.Application.Abstractions.Interfaces.Auth;
+﻿using AuthApi.Application.Abstractions.DTOs.Auth;
+using AuthApi.Application.Abstractions.Interfaces.Auth;
 using AuthApi.Application.Abstractions.Messaging.Command;
 using AuthApi.Application.Common;
 using AuthApi.Application.Features.Auth.DTOs;
 using AuthApi.Domain.ObjectValues;
 
-namespace AuthApi.Application.Features.Auth.Commands.Register
+namespace AuthApi.Application.Features.Auth.Commands.Register;
+
+public class RegisterCommandHandler(IIdentityService _services) : ICommandHandler<RegisterCommand, Result<RegisterResponse>>
 {
-    public class RegisterCommandHandler(IIdentityService _services) : ICommandHandler<RegisterCommand, Result<RegisterResponse>>
+    public async Task<Result<RegisterResponse>> Handle(RegisterCommand request, CancellationToken cancellationToken)
     {
-        public async Task<Result<RegisterResponse>> Handle(RegisterCommand request, CancellationToken cancellationToken)
-        {
-            if (!Email.TryCreate(request.Email, out var newEmail))
-                return Result<RegisterResponse>.Fail(AuthErrors.EmailInvalid);
+        if (!Email.TryCreate(request.Email, out var newEmail))
+            return Result<RegisterResponse>.Fail(AuthErrors.EmailInvalid);
 
-            var newRes = request with { Email = newEmail!.Value };
+        var registerRequest = new RegisterRequest(
+            newEmail!.Value,
+            request.FirstName,
+            request.LastName,
+            request.UserName,
+            request.PhoneNumber,
+            request.DateOfBirth,
+            request.Password);
 
-            return await _services.RegisterAsync(newRes);
-        }
+        return await _services.RegisterAsync(registerRequest, cancellationToken);
     }
 }

@@ -1,12 +1,8 @@
-﻿using AuthApi.Application.Abstractions.Interfaces.Auth;
+﻿using AuthApi.Application.Abstractions.DTOs.Auth;
+using AuthApi.Application.Abstractions.Interfaces.Auth;
 using AuthApi.Application.Abstractions.Interfaces.UnitOfWork;
 using AuthApi.Application.Abstractions.Repositories.Email;
 using AuthApi.Application.Common;
-using AuthApi.Application.Features.Auth.Commands.Login;
-using AuthApi.Application.Features.Auth.Commands.Logout;
-using AuthApi.Application.Features.Auth.Commands.RefreshToken;
-using AuthApi.Application.Features.Auth.Commands.Register;
-using AuthApi.Application.Features.Auth.Commands.ResetPassword;
 using AuthApi.Application.Features.Auth.DTOs;
 using AuthApi.Domain.Entities.Common;
 using AuthApi.Domain.Enums;
@@ -20,7 +16,6 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using StackExchange.Redis;
-using System.Data;
 using System.Security.Cryptography;
 
 namespace AuthApi.Infrastructure.Services.Auth
@@ -139,7 +134,7 @@ namespace AuthApi.Infrastructure.Services.Auth
             );
         }
 
-        public async Task<Result<LoginResponse>> LoginAsync(LoginCommand req)
+        public async Task<Result<LoginResponse>> LoginAsync(LoginRequest req, CancellationToken cancellationToken)
         {
             var user = await _userManager.FindByEmailAsync(req.Email);
             if (user == null)
@@ -182,7 +177,7 @@ namespace AuthApi.Infrastructure.Services.Auth
             );
         }
 
-        public async Task<Result<LogoutResponse>> LogoutAsync(LogoutCommand request)
+        public async Task<Result<LogoutResponse>> LogoutAsync(CancellationToken cancellationToken)
         {
             await _tokenService.RevokeRefreshTokenServiceAsync();
             _tokenHandler.ClearTokenCookies();
@@ -191,7 +186,7 @@ namespace AuthApi.Infrastructure.Services.Auth
                 new LogoutResponse(Message: "Logout successful"));
         }
 
-        public async Task<Result<RefreshTokenResponse>> RefeshTokenAsync(RefreshTokenCommand refresh)
+        public async Task<Result<RefreshTokenResponse>> RefreshTokenAsync(CancellationToken cancellationToken)
         {
             var token = await _tokenService.RefreshTokenServiceAsync();
 
@@ -207,7 +202,7 @@ namespace AuthApi.Infrastructure.Services.Auth
                         expiredAt: token.Value.AccessTokenExpiresAt));
         }
 
-        public async Task<Result<RegisterResponse>> RegisterAsync(RegisterCommand req)
+        public async Task<Result<RegisterResponse>> RegisterAsync(RegisterRequest req, CancellationToken cancellationToken)
         {
             var user = new ApplicationUser(
                 userName: req.UserName,
@@ -282,7 +277,7 @@ namespace AuthApi.Infrastructure.Services.Auth
             }
         }
 
-        public async Task<Result<OtpResponse>> SendOTPAsync(string email)
+        public async Task<Result<OtpResponse>> SendOTPAsync(string email, CancellationToken cancellationToken)
         {
             var user = await _userManager.FindByEmailAsync(email);
             if (user == null)
@@ -319,7 +314,7 @@ namespace AuthApi.Infrastructure.Services.Auth
             });
         }
 
-        public async Task<Result<NewPassResponse>> SetNewPassAsync(ResetPasswordCommand reset)
+        public async Task<Result<NewPassResponse>> SetNewPassAsync(ResetPasswordRequest reset, CancellationToken cancellationToken)
         {
             var key = $"{OTPKey}{reset.Email.ToLower()}";
             var db = _redis.GetDatabase();
@@ -358,7 +353,7 @@ namespace AuthApi.Infrastructure.Services.Auth
             });
         }
 
-        public async Task<Result<bool>> VerifyEmailAsync(Guid userId, string token)
+        public async Task<Result<bool>> VerifyEmailAsync(Guid userId, string token, CancellationToken cancellationToken)
         {
             var user = await _userManager.FindByIdAsync(userId.ToString());
 

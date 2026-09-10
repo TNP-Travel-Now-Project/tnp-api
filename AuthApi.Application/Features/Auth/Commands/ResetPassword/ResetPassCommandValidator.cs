@@ -5,7 +5,7 @@ using FluentValidation;
 
 namespace AuthApi.Application.Features.Auth.Commands.ResetPassword
 {
-    public class ResetPassCommandValidator : AbstractValidator<ResetPasswordCommand>
+    public class ResetPassCommandValidator : AbstractValidator<ResetPassCommand>
     {
         public ResetPassCommandValidator()
         {

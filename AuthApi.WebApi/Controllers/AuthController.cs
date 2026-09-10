@@ -101,7 +101,7 @@ namespace AuthApi.WebApi.Controllers
         [HttpPost("reset-password")]
         [ProducesResponseType(typeof(NewPassResponse), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
-        public async Task<ActionResult<NewPassResponse>> ResetPassword(ResetPasswordCommand command)
+        public async Task<ActionResult<NewPassResponse>> ResetPassword(ResetPassCommand command)
         {
             var result = await _mediator.Send(command);
             return result.IsSuccess

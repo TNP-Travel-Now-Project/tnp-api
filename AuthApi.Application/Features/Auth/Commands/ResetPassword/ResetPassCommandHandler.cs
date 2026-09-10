@@ -1,25 +1,20 @@
-﻿using AuthApi.Application.Abstractions.Interfaces.Auth;
+﻿using AuthApi.Application.Abstractions.DTOs.Auth;
+using AuthApi.Application.Abstractions.Interfaces.Auth;
+using AuthApi.Application.Abstractions.Messaging.Command;
 using AuthApi.Application.Common;
 using AuthApi.Application.Features.Auth.DTOs;
 using AuthApi.Domain.ObjectValues;
-using MediatR;
 
-namespace AuthApi.Application.Features.Auth.Commands.ResetPassword
+namespace AuthApi.Application.Features.Auth.Commands.ResetPassword;
+
+public class ResetPassCommandHandler(IIdentityService _services) : ICommandHandler<ResetPassCommand, Result<NewPassResponse>>
 {
-    public class ResetPassCommandHandler(IIdentityService _services) : IRequestHandler<ResetPasswordCommand, Result<NewPassResponse>>
+    public async Task<Result<NewPassResponse>> Handle(ResetPassCommand request, CancellationToken cancellationToken)
     {
-        public async Task<Result<NewPassResponse>> Handle(ResetPasswordCommand request, CancellationToken cancellationToken)
-        {
-            if (!Email.TryCreate(request.Email, out var email))
-                return Result<NewPassResponse>.Fail(AuthErrors.EmailInvalid);
+        if (!Email.TryCreate(request.Email, out var email))
+            return Result<NewPassResponse>.Fail(AuthErrors.EmailInvalid);
 
-            var newRequest = request with
-            {
-                Email = email!.Value,
-                Otp = request.Otp
-            };
-
-            return await _services.SetNewPassAsync(newRequest);
-        }
+        var resetRequest = new ResetPasswordRequest(email!.Value, request.Otp, request.NewPass);
+        return await _services.SetNewPassAsync(resetRequest, cancellationToken);
     }
 }
