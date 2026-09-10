@@ -28,6 +28,7 @@ namespace AuthApi.Infrastructure.Persistence.Dapper.Repositories
             if (req.DateOfBirth is not null) user.DateOfBirth = req.DateOfBirth.Value;
             user.UpdatedAt = DateTime.UtcNow;
 
+            await _uow.SaveChangesAsync(cancellationToken);
             return true;
         }
 
@@ -45,6 +46,7 @@ namespace AuthApi.Infrastructure.Persistence.Dapper.Repositories
 
             if (addRoles.Count == 0) return;
             await _dbContext.UserRoles.AddRangeAsync(addRoles);
+            await _uow.SaveChangesAsync(cancellationToken);
         }
 
         public async Task RemoveRolesAsync(Guid userId, string[] rolesArr, CancellationToken cancellationToken = default)
@@ -58,6 +60,7 @@ namespace AuthApi.Infrastructure.Persistence.Dapper.Repositories
             if (!existRoles.Any()) return;
 
             _dbContext.UserRoles.RemoveRange(existRoles);
+            await _uow.SaveChangesAsync(cancellationToken);
         }
 
         public async Task<bool> SoftDeleteUserAsync(Guid userId, CancellationToken cancellationToken = default)
