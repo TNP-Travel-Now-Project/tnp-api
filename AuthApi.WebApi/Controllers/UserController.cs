@@ -1,6 +1,6 @@
-﻿using AuthApi.Application.Abstractions.Interfaces.Repositories.User;
-using AuthApi.Application.Common;
+﻿using AuthApi.Application.Common;
 using AuthApi.Application.Features.Users.Commands.AssignRoles;
+using AuthApi.Application.Features.Users.Commands.LockoutUser;
 using AuthApi.Application.Features.Users.Commands.RemoveRoles;
 using AuthApi.Application.Features.Users.Commands.UpdateUser;
 using AuthApi.Application.Features.Users.DTOs;
@@ -14,9 +14,7 @@ namespace AuthApi.WebApi.Controllers
 {
     [Route("api/users")]
     [ApiController]
-    public class UserController(
-        IMediator _mediator,
-        IUserWriteRepository _userWriteRepo) : ControllerBase
+    public class UserController(IMediator _mediator) : ControllerBase
     {
         [HttpGet]
         [AllowAnonymous]
@@ -105,10 +103,7 @@ namespace AuthApi.WebApi.Controllers
         [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status404NotFound)]
         public async Task<IActionResult> LockoutUser(Guid id)
         {
-            var updated = await _userWriteRepo.SoftDeleteUserAsync(id);
-            if (!updated)
-                return NotFound(new ApiErrorResponse(new Error(ErrorCodes.NotFound, $"User with ID {id} not found")));
-
+            await _mediator.Send(new LockoutUserCommand(id));
             return NoContent();
         }
     }
