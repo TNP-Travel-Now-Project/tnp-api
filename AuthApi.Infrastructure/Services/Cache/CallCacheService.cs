@@ -1,27 +1,33 @@
 ﻿using AuthApi.Application.Abstractions.Interfaces.Cache;
-using AuthApi.Application.Features.Auth.DTOs;
-using System.Globalization;
+using Microsoft.Extensions.Logging;
 
-namespace AuthApi.Infrastructure.Services.Cache
+namespace AuthApi.Infrastructure.Services.Cache;
+
+public class CallCacheService<T>(ICacheService _cache, ILogger<CallCacheService<T>> _logger) : ICallCacheService<T>
+    where T : class
 {
-    public class CallCacheService(ICacheService _cache) : ICallCacheService
+    public async Task<T?> TryGetCachedAsync(string key, CancellationToken ct)
     {
-        public async Task<MeResponse?> TryGetCachedAsync(string key, CancellationToken ct)
+        try
         {
-            try
-            {
-                return await _cache.GetAsync<MeResponse>(key, ct);
-            }
-            catch { return null; } // Cache failure → fallback to DB
+            return await _cache.GetAsync<T>(key, ct);
         }
-
-        public async Task TrySetCacheAsync(string key, MeResponse value, TimeSpan CacheDuration, CancellationToken ct)
+        catch (Exception ex)
         {
-            try
-            {
-                await _cache.SetAsync(key, value, CacheDuration, ct);
-            }
-            catch { }
+            _logger.LogWarning(ex, "Failed to get cache for key {Key}", key);
+            return null;
+        }
+    }
+
+    public async Task TrySetCacheAsync(string key, T value, TimeSpan cacheDuration, CancellationToken ct)
+    {
+        try
+        {
+            await _cache.SetAsync(key, value, cacheDuration, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to set cache for key {Key}", key);
         }
     }
 }

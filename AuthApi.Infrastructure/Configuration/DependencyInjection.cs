@@ -4,6 +4,7 @@ using AuthApi.Application.Abstractions.Interfaces.Repositories.User;
 using AuthApi.Application.Abstractions.Interfaces.UnitOfWork;
 using AuthApi.Application.Abstractions.Repositories.Email;
 using AuthApi.Application.Common.Security;
+using AuthApi.Application.Features.Auth.DTOs;
 using AuthApi.Infrastructure.Identities;
 using AuthApi.Infrastructure.Persistence;
 using AuthApi.Infrastructure.Persistence.Connection;
@@ -80,7 +81,7 @@ namespace AuthApi.Infrastructure.Configuration
             services.AddScoped<IUserContext, HttpUserContext>();
 
             services.AddScoped<ICacheService, RedisCacheService>();
-            services.AddScoped<ICallCacheService, CallCacheService>();
+            services.AddScoped<ICallCacheService<MeResponse>, CallCacheService<MeResponse>>();
 
             services.AddScoped<IEmailService, EmailService>();
             #endregion
