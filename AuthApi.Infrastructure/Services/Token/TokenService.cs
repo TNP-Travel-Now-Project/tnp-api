@@ -61,7 +61,9 @@ namespace AuthApi.Infrastructure.Services.Token
 
             claims.AddRange(roles.Select(name => new Claim(ClaimTypes.Role, name)));
 
-            var jwtKey = _appSetting.Value.JwtKey ?? throw new Exception("JWT Key missing");
+            var jwtKey = _appSetting.Value.JwtKey
+                ?? throw new InvalidOperationException(
+                    "JWT Key is not configured. Set JWT_KEY environment variable or add JwtKey to AppSettings.");
 
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
