@@ -1,21 +1,21 @@
-﻿using AuthApi.Application.Abstractions.Interfaces.Auth;
-using AuthApi.Application.Abstractions.Interfaces.Email;
+﻿using AuthApi.Application.Abstractions.DTOs.Auth;
+using AuthApi.Application.Abstractions.Interfaces.Auth;
+using AuthApi.Application.Abstractions.Interfaces.UnitOfWork;
 using AuthApi.Application.Abstractions.Repositories.Email;
 using AuthApi.Application.Common;
-using AuthApi.Application.Features.Auth.Commands.Login;
-using AuthApi.Application.Features.Auth.Commands.Logout;
-using AuthApi.Application.Features.Auth.Commands.RefreshToken;
-using AuthApi.Application.Features.Auth.Commands.Register;
-using AuthApi.Application.Features.Auth.Commands.ResetPassword;
 using AuthApi.Application.Features.Auth.DTOs;
+using AuthApi.Domain.Entities.Common;
+using AuthApi.Domain.Enums;
 using AuthApi.Infrastructure.Common;
 using AuthApi.Infrastructure.Identities;
+using AuthApi.Infrastructure.Persistence;
 using AuthApi.Infrastructure.Services.Email;
+using Google.Apis.Auth;
 using Hangfire;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using StackExchange.Redis;
-using System.Data;
 using System.Security.Cryptography;
 
 namespace AuthApi.Infrastructure.Services.Auth
@@ -23,31 +23,133 @@ namespace AuthApi.Infrastructure.Services.Auth
     public class IdentityService(
         ITokenService _tokenService,
         UserManager<ApplicationUser> _userManager,
-        IEmailChecker _emailChecker,
         IEmailService _emailService,
         IBackgroundJobClient _jobClient,
         IOptions<AppSettings> _appSetting,
         IConnectionMultiplexer _redis,
-        IAuthCookieService _tokenHandler) : IIdentityService
+        IAuthCookieService _tokenHandler,
+        ILogger<IdentityService> _logger,
+        IUnitOfWork _uow,
+        AppDbContext _dbContext) : IIdentityService
     {
         public string OTPKey { get => "otp:"; }
 
-        public async Task<Result<LoginResponse>> LoginAsync(LoginCommand req)
+        private static string MapIdentityErrorToField(string code) => code switch
+        {
+            "PasswordTooShort" or "PasswordRequiresDigit" or "PasswordRequiresLower"
+                or "PasswordRequiresUpper" or "PasswordRequiresNonAlphanumeric"
+                or "PasswordMismatch" or "UserAlreadyHasPassword" => "Password",
+
+            "DuplicateEmail" or "InvalidEmail" => "Email",
+
+            "DuplicateUserName" or "InvalidUserName" => "UserName",
+
+            _ => "General"
+        };
+
+        public async Task<Result<LoginResponse>> GoogleLoginAsync(string tokenId, CancellationToken cancellationToken)
+        {
+            GoogleJsonWebSignature.Payload payload;
+            try
+            {
+                var settings = new GoogleJsonWebSignature.ValidationSettings
+                {
+                    Audience = new[] { _appSetting.Value.GoogleClientId }
+                };
+
+                payload = await GoogleJsonWebSignature.ValidateAsync(tokenId, settings);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Google token validation failed");
+                return Result<LoginResponse>.Fail(AuthErrors.InvalidCredentials);
+            }
+
+
+            if (!payload.EmailVerified)
+                return Result<LoginResponse>.Fail(AuthErrors.EmailNotConfirmed);
+
+            var loginInfo = new UserLoginInfo("Google", payload.Subject, "Google");
+            var user = await _userManager.FindByLoginAsync("Google", payload.Subject);
+
+            if (user == null)
+            {
+                user = await _userManager.FindByEmailAsync(payload.Email);
+
+                if (user != null)
+                {
+                    await _userManager.AddLoginAsync(user, loginInfo);
+                }
+                else
+                {
+                    user = new ApplicationUser
+                    {
+                        UserName = payload.Email,
+                        Email = payload.Email,
+                        FirstName = payload.GivenName ?? string.Empty,
+                        LastName = payload.FamilyName ?? string.Empty,
+                        EmailConfirmed = true
+                    };
+
+                    var createResult = await _userManager.CreateAsync(user);
+                    if (!createResult.Succeeded)
+                    {
+                        var errors = createResult.Errors
+                            .GroupBy(e => MapIdentityErrorToField(e.Code))
+                            .ToDictionary(g => g.Key, g => g.Select(e => new FieldError(e.Code, e.Description)).ToArray());
+                        return Result<LoginResponse>.Fail(
+                            new Error(ErrorCodes.RegistrationError, "Failed to create user from Google", errors));
+                    }
+
+                    await _userManager.AddLoginAsync(user, loginInfo);
+                    await _userManager.AddToRoleAsync(user, "User");
+
+                    var userName = user.UserName ?? string.Empty;
+                    var domainUser = Users.Create(user.Id, UserRole.User, userName);
+                    await _dbContext.AppUsers.AddAsync(domainUser);
+                    await _uow.SaveChangesAsync(cancellationToken);
+                }
+            }
+
+            var roles = await _userManager.GetRolesAsync(user);
+
+            var userDto = new AuthUserDto
+            {
+                Id = user.Id,
+                Email = user.Email ?? string.Empty,
+                UserName = user.UserName!,
+                Roles = [.. roles]
+            };
+
+            var token = await _tokenService.GenerateTokenServiceAsync(userDto, roles);
+
+            return Result<LoginResponse>.Success(
+                new LoginResponse(
+                    accessToken: token.AccessToken,
+                    refreshToken: null,
+                    expired: token.AccessTokenExpiresAt,
+                    userId: user.Id,
+                    email: user.Email!,
+                    roles: [.. roles])
+            );
+        }
+
+        public async Task<Result<LoginResponse>> LoginAsync(LoginRequest req, CancellationToken cancellationToken)
         {
             var user = await _userManager.FindByEmailAsync(req.Email);
             if (user == null)
-                return Result<LoginResponse>.Fail(new Error(ErrorCodes.InvalidCredentials, "Invalid credentials"));
+                return Result<LoginResponse>.Fail(AuthErrors.InvalidCredentials);
 
             if (await _userManager.IsLockedOutAsync(user))
-                return Result<LoginResponse>.Fail(new Error(ErrorCodes.UserLockedOut, "User is locked"));
+                return Result<LoginResponse>.Fail(AuthErrors.UserLockedOut);
 
             if (!user.EmailConfirmed)
-                return Result<LoginResponse>.Fail(new Error(ErrorCodes.EmailNotConfirmed, "Email is not confirmed"));
+                return Result<LoginResponse>.Fail(AuthErrors.EmailNotConfirmed);
 
             if (!await _userManager.CheckPasswordAsync(user, req.Password))
             {
                 await _userManager.AccessFailedAsync(user);
-                return Result<LoginResponse>.Fail(new Error(ErrorCodes.InvalidCredentials, "Invalid credentials"));
+                return Result<LoginResponse>.Fail(AuthErrors.InvalidCredentials);
             }
 
             await _userManager.ResetAccessFailedCountAsync(user);
@@ -75,7 +177,7 @@ namespace AuthApi.Infrastructure.Services.Auth
             );
         }
 
-        public async Task<Result<LogoutResponse>> LogoutAsync(LogoutCommand request)
+        public async Task<Result<LogoutResponse>> LogoutAsync(CancellationToken cancellationToken)
         {
             await _tokenService.RevokeRefreshTokenServiceAsync();
             _tokenHandler.ClearTokenCookies();
@@ -84,81 +186,109 @@ namespace AuthApi.Infrastructure.Services.Auth
                 new LogoutResponse(Message: "Logout successful"));
         }
 
-        public async Task<Result<RefreshTokenResponse>> RefeshTokenAsync(RefreshTokenCommand refresh)
+        public async Task<Result<RefreshTokenResponse>> RefreshTokenAsync(CancellationToken cancellationToken)
         {
             var token = await _tokenService.RefreshTokenServiceAsync();
 
-            return token.AccessToken != null
-                ? Result<RefreshTokenResponse>.Success(new RefreshTokenResponse(
-                        accessToken: token.AccessToken,
-                        refreshtoken: null,
-                        expiredAt: token.AccessTokenExpiresAt))
+            if (token.Value == null || token.Value.AccessToken == null)
+                return Result<RefreshTokenResponse>.Fail(
+                    new Error(
+                        ErrorCodes.TokenRefreshError,
+                        "An error occurred while processing the refresh token"));
 
-                : Result<RefreshTokenResponse>.Fail("Occured error while RefreshToken handle");
+            return Result<RefreshTokenResponse>.Success(new RefreshTokenResponse(
+                        accessToken: token.Value.AccessToken,
+                        refreshtoken: null,
+                        expiredAt: token.Value.AccessTokenExpiresAt));
         }
 
-        public async Task<Result<RegisterResponse>> RegisterAsync(RegisterCommand req)
+        public async Task<Result<RegisterResponse>> RegisterAsync(RegisterRequest req, CancellationToken cancellationToken)
         {
-            var db = _redis.GetDatabase();
-
             var user = new ApplicationUser(
+                userName: req.UserName,
                 firstName: req.FirstName,
                 lastName: req.LastName,
                 dateOfBirth: req.DateOfBirth,
-                email: req.Email,
-                userName: req.UserName);
+                email: req.Email);
 
-            var result = await _userManager.CreateAsync(user, req.Password);
-            if (!result.Succeeded)
+            using var transaction = await _dbContext.Database.BeginTransactionAsync();
+            try
             {
-                var errors = result.Errors.Select(e => e.Description).ToList();
-                return Result<RegisterResponse>.Fail(string.Join(", ", errors));
+                var result = await _userManager.CreateAsync(user, req.Password);
+                if (!result.Succeeded)
+                {
+                    await transaction.RollbackAsync();
+                    var errors = result.Errors
+                        .GroupBy(e => MapIdentityErrorToField(e.Code))
+                        .ToDictionary(g => g.Key, g => g.Select(e => new FieldError(e.Code, e.Description)).ToArray());
+                    return Result<RegisterResponse>.Fail(
+                        new Error(ErrorCodes.RegistrationError, "Registration failed", errors));
+                }
+
+                await _userManager.AddToRoleAsync(user, "User");
+
+                var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+                if (string.IsNullOrEmpty(token))
+                {
+                    await transaction.RollbackAsync();
+                    return Result<RegisterResponse>.Fail(AuthErrors.TokenGenerationFailed);
+                }
+
+                // Lay userId cua bang userAuth -> luu user business logic xuong db
+                var userName = user.UserName ?? string.Empty;
+                var domainUser = Users.Create(user.Id, UserRole.User, userName);
+                await _dbContext.AppUsers.AddAsync(domainUser);
+                await _uow.SaveChangesAsync();
+
+                await transaction.CommitAsync();
+
+                // Gui email xac minh
+                var confirmLink =
+                $"{_appSetting.Value.FrontendUrl}/api/auth/verify-email" +
+                                                    $"?userId={user.Id}" +
+                                                    $"&token={Uri.EscapeDataString(token)}";
+
+                _jobClient.Enqueue(() =>
+                    _emailService.SendEmailAsync(
+                        user.Email!,
+                        "Verify your email",
+                        $"Click to verify: <a href='{confirmLink}'>Verify Email</a>")
+                );
+
+                // Xoa user neu nhu chua xac minh
+                _jobClient.Schedule<EmailCleanupJob>(p =>
+                    p.DeleteUnverifiedUser(user.Id),
+                    TimeSpan.FromHours(2)
+                );
+
+                return Result<RegisterResponse>.Success(
+                    new RegisterResponse(
+                    UserId: user.Id,
+                    FirstName: user.FirstName,
+                    LastName: user.LastName,
+                    UserName: user.UserName!,
+                    Email: user.Email ?? string.Empty,
+                    CreatedAt: user.CreatedAt)
+                );
             }
-
-            await _userManager.AddToRoleAsync(user, "User");
-
-            var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
-            if (string.IsNullOrEmpty(token))
-                return Result<RegisterResponse>.Fail("Failed to generate email confirmation token");
-
-            var confirmLink =
-            $"{_appSetting.Value.FrontendUrl}/api/auth/verify-email" +
-                                                $"?userId={user.Id}" +
-                                                $"&token={Uri.EscapeDataString(token)}";
-
-            _jobClient.Enqueue(() =>
-                _emailService.SendEmailAsync(
-                    user.Email!,
-                    "Verify your email",
-                    $"Click to verify: <a href='{confirmLink}'>Verify Email</a>")
-            );
-
-            // Xoa user neu nhu chua xac minh
-            _jobClient.Schedule<EmailCleanupJob>(p =>
-                p.DeleteUnverifiedUser(user.Id),
-                TimeSpan.FromHours(2)
-            );
-
-            return Result<RegisterResponse>.Success(
-                new RegisterResponse(
-                UserId: user.Id,
-                FirstName: user.FirstName,
-                LastName: user.LastName,
-                UserName: user.UserName!,
-                Email: user.Email ?? string.Empty,
-                CreatedAt: user.CreatedAt)
-            );
+            catch (Exception)
+            {
+                await transaction.RollbackAsync(); throw;
+            }
         }
 
-        public async Task<Result<OtpResponse>> SendOTPAsync(string email)
+        public async Task<Result<OtpResponse>> SendOTPAsync(string email, CancellationToken cancellationToken)
         {
-            var confirm = await _userManager.FindByEmailAsync(email);
-            if (confirm == null)
-                return Result<OtpResponse>.Fail($"This email address {email} is not contain in the system");
-
-            var checkEmail = await _emailChecker.IsValidAsync(email);
-            if (!checkEmail)
-                return Result<OtpResponse>.Fail($"Email Invalid");
+            var user = await _userManager.FindByEmailAsync(email);
+            if (user == null)
+            {
+                _logger.LogWarning("SendOTP requested for unknown email {Email}", email);
+                return Result<OtpResponse>.Success(new OtpResponse
+                {
+                    Email = email,
+                    Expired = DateTime.UtcNow.AddMinutes(5)
+                });
+            }
 
             var key = $"{OTPKey}{email.ToLower()}";
             var db = _redis.GetDatabase();
@@ -175,7 +305,7 @@ namespace AuthApi.Infrastructure.Services.Auth
 
             var isRedis = await db.StringSetAsync(key, otp, expired);
             if (!isRedis)
-                return Result<OtpResponse>.Fail($"Redis Invalid");
+                return Result<OtpResponse>.Fail(AuthErrors.RedisFailure);
 
             return Result<OtpResponse>.Success(new OtpResponse
             {
@@ -184,31 +314,34 @@ namespace AuthApi.Infrastructure.Services.Auth
             });
         }
 
-        public async Task<Result<NewPassResponse>> SetNewPassAsync(ResetPasswordCommand reset)
+        public async Task<Result<NewPassResponse>> SetNewPassAsync(ResetPasswordRequest reset, CancellationToken cancellationToken)
         {
             var key = $"{OTPKey}{reset.Email.ToLower()}";
             var db = _redis.GetDatabase();
             var keyExist = await db.StringGetAsync(key);
 
             if (keyExist.IsNullOrEmpty)
-                return Result<NewPassResponse>.Fail("OTP expired or not found");
+                return Result<NewPassResponse>.Fail(AuthErrors.OtpExpired);
 
             if (keyExist != reset.Otp)
-                return Result<NewPassResponse>.Fail("OTP incorrect");
+                return Result<NewPassResponse>.Fail(AuthErrors.OtpIncorrect);
 
             await db.KeyDeleteAsync(key);
 
             var user = await _userManager.FindByEmailAsync(reset.Email);
             if (user == null)
-                return Result<NewPassResponse>.Fail("User not found");
+                return Result<NewPassResponse>.Fail(AuthErrors.UserNotFound);
 
             var token = await _userManager.GeneratePasswordResetTokenAsync(user);
             var newPass = await _userManager.ResetPasswordAsync(user, token, reset.NewPass);
 
             if (!newPass.Succeeded)
             {
-                var errors = newPass?.Errors.Select(e => e.Description).ToList() ?? new List<string>();
-                return Result<NewPassResponse>.Fail(string.Join(", ", errors));
+                var errors = newPass.Errors
+                    .GroupBy(e => MapIdentityErrorToField(e.Code))
+                    .ToDictionary(g => g.Key, g => g.Select(e => new FieldError(e.Code, e.Description)).ToArray());
+                return Result<NewPassResponse>.Fail(
+                    new Error(ErrorCodes.ValidationError, "Password reset failed", errors));
             }
 
             user.UpdatedAt = DateTime.UtcNow;
@@ -220,22 +353,25 @@ namespace AuthApi.Infrastructure.Services.Auth
             });
         }
 
-        public async Task<Result<bool>> VerifyEmailAsync(Guid userId, string token)
+        public async Task<Result<bool>> VerifyEmailAsync(Guid userId, string token, CancellationToken cancellationToken)
         {
             var user = await _userManager.FindByIdAsync(userId.ToString());
 
             if (user == null)
-                return Result<bool>.Fail("User not found");
+                return Result<bool>.Fail(AuthErrors.UserNotFound);
 
             if (string.IsNullOrEmpty(token))
-                return Result<bool>.Fail("Token is invalid");
+                return Result<bool>.Fail(AuthErrors.TokenInvalid);
 
             var confirmEmail = await _userManager.ConfirmEmailAsync(user, token);
 
             if (!confirmEmail.Succeeded)
             {
-                var errors = confirmEmail.Errors.Select(e => e.Description).ToList();
-                return Result<bool>.Fail(string.Join(", ", errors));
+                var errors = confirmEmail.Errors
+                    .GroupBy(e => MapIdentityErrorToField(e.Code))
+                    .ToDictionary(g => g.Key, g => g.Select(e => new FieldError(e.Code, e.Description)).ToArray());
+                return Result<bool>.Fail(
+                    new Error(ErrorCodes.ValidationError, "Email verification failed", errors));
             }
 
             return Result<bool>.Success(true);

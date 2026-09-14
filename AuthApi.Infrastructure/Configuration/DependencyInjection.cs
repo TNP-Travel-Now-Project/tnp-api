@@ -1,10 +1,10 @@
 ﻿using AuthApi.Application.Abstractions.Interfaces.Auth;
 using AuthApi.Application.Abstractions.Interfaces.Cache;
-using AuthApi.Application.Abstractions.Interfaces.Email;
-using AuthApi.Application.Abstractions.Interfaces.Repositories;
+using AuthApi.Application.Abstractions.Interfaces.Repositories.User;
+using AuthApi.Application.Abstractions.Interfaces.UnitOfWork;
 using AuthApi.Application.Abstractions.Repositories.Email;
 using AuthApi.Application.Common.Security;
-using AuthApi.Application.Features.Auth.Commands.Register;
+using AuthApi.Application.Features.Auth.DTOs;
 using AuthApi.Infrastructure.Identities;
 using AuthApi.Infrastructure.Persistence;
 using AuthApi.Infrastructure.Persistence.Connection;
@@ -13,11 +13,9 @@ using AuthApi.Infrastructure.Services.Auth;
 using AuthApi.Infrastructure.Services.Cache;
 using AuthApi.Infrastructure.Services.Email;
 using AuthApi.Infrastructure.Services.Token;
-using FluentValidation;
 using Hangfire;
 using Hangfire.Redis.StackExchange;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -42,9 +40,11 @@ namespace AuthApi.Infrastructure.Configuration
             services.Configure<IdentityOptions>(options =>
             {
                 // Password
+                options.Password.RequiredLength = 8;
                 options.Password.RequireDigit = true;
                 options.Password.RequireUppercase = true;
-                options.Password.RequiredLength = 6;
+                options.Password.RequireLowercase = true;
+                options.Password.RequireNonAlphanumeric = true;
 
                 // Lockout
                 options.Lockout.AllowedForNewUsers = true;
@@ -62,14 +62,18 @@ namespace AuthApi.Infrastructure.Configuration
             {
                 ops.SignIn.RequireConfirmedEmail = true;
 
-            }).AddRoles<IdentityRole<Guid>>()
-              .AddEntityFrameworkStores<AppDbContext>()
-              .AddDefaultTokenProviders();
+            })
+            .AddErrorDescriber<CustomIdentityErrorDescriber>()
+            .AddRoles<IdentityRole<Guid>>()
+            .AddEntityFrameworkStores<AppDbContext>()
+            .AddDefaultTokenProviders();
             #endregion
 
             #region Service DI
             services.AddScoped<IUserReadRepository, UserReadRepository>();
             services.AddScoped<IUserWriteRepository, UserWriteRepository>();
+
+            services.AddScoped<IUnitOfWork, UnitOfWork>();
 
             services.AddScoped<ITokenService, TokenService>();
             services.AddScoped<IIdentityService, IdentityService>();
@@ -77,14 +81,9 @@ namespace AuthApi.Infrastructure.Configuration
             services.AddScoped<IUserContext, HttpUserContext>();
 
             services.AddScoped<ICacheService, RedisCacheService>();
-            services.AddScoped<ICallCacheService, CallCacheService>();
+            services.AddScoped<ICallCacheService<MeResponse>, CallCacheService<MeResponse>>();
 
             services.AddScoped<IEmailService, EmailService>();
-            services.AddScoped<IEmailChecker, EmailChecker>();
-            #endregion
-
-            #region FluentValidation DI
-            services.AddValidatorsFromAssemblyContaining<RegisterCommandValidator>();
             #endregion
 
             #region Redis Config
@@ -119,13 +118,12 @@ namespace AuthApi.Infrastructure.Configuration
             services.AddSignalR()
                 .AddStackExchangeRedis(redisConnectionString);
 
-            // HANGFIRE SQL SERVER STORAGE
+            // HANGFIRE STORAGE
             services.AddHangfire(config =>
             {
                 config.SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
                          .UseSimpleAssemblyNameTypeSerializer()
                          .UseRecommendedSerializerSettings()
-                         .UseSqlServerStorage(connectionString)
                          .UseRedisStorage(redisConnectionString);
             });
 

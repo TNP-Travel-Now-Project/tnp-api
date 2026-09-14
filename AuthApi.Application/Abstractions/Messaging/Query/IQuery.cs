@@ -2,5 +2,5 @@
 
 namespace AuthApi.Application.Abstractions.Messaging.Query
 {
-    public interface IQuery<out TReponse> : IRequest<TReponse>;
+    public interface IQuery<out TResponse> : IRequest<TResponse>;
 }

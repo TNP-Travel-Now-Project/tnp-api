@@ -8,9 +8,11 @@ using AuthApi.Application.Features.Auth.Commands.VerifyEmail;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using AuthApi.Application.Common;
 using AuthApi.Application.Features.Auth.DTOs;
 using AuthApi.Application.Features.Auth.Queries.Me;
+using AuthApi.Application.Features.Auth.Commands.GoogleLogin;
 
 namespace AuthApi.WebApi.Controllers
 {
@@ -18,8 +20,7 @@ namespace AuthApi.WebApi.Controllers
     [Route("api/auth"), ApiController]
     public class AuthController(IMediator _mediator) : ControllerBase
     {
-        [HttpGet("me")]
-        [Authorize]
+        [Authorize, HttpGet("me")]
         [ProducesResponseType(typeof(MeResponse), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status404NotFound)]
@@ -36,6 +37,7 @@ namespace AuthApi.WebApi.Controllers
         }
 
         [HttpPost("login")]
+        [EnableRateLimiting("auth")]
         [ProducesResponseType(typeof(LoginResponse), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status500InternalServerError)]
@@ -48,7 +50,20 @@ namespace AuthApi.WebApi.Controllers
                 : BadRequest(new ApiErrorResponse(result.Error!));
         }
 
+        [AllowAnonymous, HttpPost("google-login")]
+        [ProducesResponseType(typeof(LoginResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status500InternalServerError)]
+        public async Task<ActionResult<LoginResponse>> GoogleLogin(GoogleLoginCommand command)
+        {
+            var result = await _mediator.Send(command);
+            return result.IsSuccess
+                ? Ok(result.Value)
+                : BadRequest(new ApiErrorResponse(result.Error!));
+        }
+
         [HttpPost("register")]
+        [EnableRateLimiting("auth")]
         [ProducesResponseType(typeof(RegisterResponse), StatusCodes.Status201Created)]
         [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status500InternalServerError)]
@@ -86,7 +101,7 @@ namespace AuthApi.WebApi.Controllers
         [HttpPost("reset-password")]
         [ProducesResponseType(typeof(NewPassResponse), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
-        public async Task<ActionResult<NewPassResponse>> ResetPassword(ResetPasswordCommand command)
+        public async Task<ActionResult<NewPassResponse>> ResetPassword(ResetPassCommand command)
         {
             var result = await _mediator.Send(command);
             return result.IsSuccess
@@ -95,6 +110,7 @@ namespace AuthApi.WebApi.Controllers
         }
 
         [HttpPost("refresh-token")]
+        [EnableRateLimiting("refresh")]
         [ProducesResponseType(typeof(RefreshTokenResponse), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
         public async Task<ActionResult<RefreshTokenResponse>> RefreshToken()

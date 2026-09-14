@@ -3,7 +3,6 @@
 public abstract class BaseEntity : IEntity
 {
     public Guid Id { get; private set; }
-
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
     public Guid? CreatedById { get; set; }

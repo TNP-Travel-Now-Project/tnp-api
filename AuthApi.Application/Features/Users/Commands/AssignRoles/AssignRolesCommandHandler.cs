@@ -1,4 +1,4 @@
-using AuthApi.Application.Abstractions.Interfaces.Repositories;
+using AuthApi.Application.Abstractions.Interfaces.Repositories.User;
 using AuthApi.Application.Abstractions.Messaging.Command;
 
 namespace AuthApi.Application.Features.Users.Commands.AssignRoles;

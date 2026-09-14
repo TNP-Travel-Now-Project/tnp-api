@@ -1,5 +1,5 @@
 using AuthApi.Application.Abstractions.Interfaces.Cache;
-using AuthApi.Application.Abstractions.Interfaces.Repositories;
+using AuthApi.Application.Abstractions.Interfaces.Repositories.User;
 using AuthApi.Application.Common;
 using AuthApi.Application.Common.Security;
 using AuthApi.Application.Features.Auth.DTOs;
@@ -13,7 +13,7 @@ public sealed class MeQueryHandlerTests
 {
     private readonly Mock<IUserReadRepository> _userRepoMock;
     private readonly Mock<IUserContext> _contextMock;
-    private readonly Mock<ICallCacheService> _callCacheMock;
+    private readonly Mock<ICallCacheService<MeResponse>> _callCacheMock;
     private readonly MeQueryHandler _handler;
     private readonly MeQuery _query = new();
 
@@ -21,7 +21,7 @@ public sealed class MeQueryHandlerTests
     {
         _userRepoMock = new Mock<IUserReadRepository>();
         _contextMock = new Mock<IUserContext>();
-        _callCacheMock = new Mock<ICallCacheService>();
+        _callCacheMock = new Mock<ICallCacheService<MeResponse>>();
 
         _handler = new MeQueryHandler(_userRepoMock.Object, _contextMock.Object, _callCacheMock.Object);
     }
@@ -37,7 +37,7 @@ public sealed class MeQueryHandlerTests
         var result = await _handler.Handle(_query, CancellationToken.None);
 
         result.IsSuccess.Should().BeFalse();
-        result.Error!.Code.Should().Be(ErrorCodes.UserNotFound);
+        result.Error!.Code.Should().Be(ErrorCodes.Unauthorized);
         result.Error!.Message.Should().Be("User not authenticated");
     }
 

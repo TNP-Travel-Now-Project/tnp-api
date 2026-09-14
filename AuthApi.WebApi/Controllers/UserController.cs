@@ -1,10 +1,11 @@
-﻿using AuthApi.Application.Abstractions.Interfaces.Repositories;
-using AuthApi.Application.Common;
+﻿using AuthApi.Application.Common;
 using AuthApi.Application.Features.Users.Commands.AssignRoles;
+using AuthApi.Application.Features.Users.Commands.LockoutUser;
 using AuthApi.Application.Features.Users.Commands.RemoveRoles;
 using AuthApi.Application.Features.Users.Commands.UpdateUser;
 using AuthApi.Application.Features.Users.DTOs;
 using AuthApi.Application.Features.Users.Queries.GetUserById;
+using AuthApi.Application.Features.Users.Queries.GetUsers;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -13,17 +14,18 @@ namespace AuthApi.WebApi.Controllers
 {
     [Route("api/users")]
     [ApiController]
-    public class UserController(
-        IMediator _mediator,
-        IUserReadRepository _userRepo,
-        IUserWriteRepository _userWriteRepo) : ControllerBase
+    public class UserController(IMediator _mediator) : ControllerBase
     {
         [HttpGet]
         [AllowAnonymous]
         [ProducesResponseType(typeof(List<UserListItemDto>), StatusCodes.Status200OK)]
-        public async Task<List<UserListItemDto>> GetUsers()
+        public async Task<ActionResult<List<UserListItemDto>>> GetUsers()
         {
-            return await _userRepo.GetAllUsersAsync();
+            var result = await _mediator.Send(new GetAllUserQuery());
+
+            return result.IsSuccess
+                ? Ok(result.Value)
+                : BadRequest(new ApiErrorResponse(result.Error!));
         }
 
         [HttpGet("{id:guid}")]
@@ -101,10 +103,7 @@ namespace AuthApi.WebApi.Controllers
         [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status404NotFound)]
         public async Task<IActionResult> LockoutUser(Guid id)
         {
-            var updated = await _userWriteRepo.SoftDeleteUserAsync(id);
-            if (!updated)
-                return NotFound(new ApiErrorResponse(new Error(ErrorCodes.NotFound, $"User with ID {id} not found")));
-
+            await _mediator.Send(new LockoutUserCommand(id));
             return NoContent();
         }
     }

@@ -10,7 +10,7 @@ namespace AuthApi.WebApi
         public string Message { get; init; } = string.Empty;
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        public IDictionary<string, string[]>? Errors { get; init; }
+        public IDictionary<string, FieldError[]>? Errors { get; init; }
 
         public ApiErrorResponse() { }
 
@@ -18,6 +18,7 @@ namespace AuthApi.WebApi
         {
             Code = error.Code;
             Message = error.Message;
+            Errors = error.Errors;
         }
     }
 }

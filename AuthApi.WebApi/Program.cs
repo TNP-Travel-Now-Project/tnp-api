@@ -1,3 +1,4 @@
+using AuthApi.Application.Common;
 using AuthApi.Application.Configuration;
 using AuthApi.Infrastructure.Common;
 using AuthApi.Infrastructure.Configuration;
@@ -19,6 +20,7 @@ using HealthChecks.UI.Client;
 using Microsoft.OpenApi;
 using Serilog;
 using System.Text;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace AuthApi.WebApi
 {
@@ -46,7 +48,7 @@ namespace AuthApi.WebApi
                 Log.Fatal(ex, "Application terminated unexpectedly");
             }
             finally
-            {
+           {
                 await Log.CloseAndFlushAsync();
             }
         }
@@ -62,8 +64,7 @@ namespace AuthApi.WebApi
 
             builder.Services.AddHttpContextAccessor();
 
-            // Nao day len prod thi them "!" cho bien isDev
-            var isDev = builder.Environment.IsDevelopment();
+            //var isDev = builder.Environment.IsDevelopment();
             var feUrl = builder.Configuration["Frontend:Url"];
 
             var connectionString = builder.Configuration.GetConnectionString("Default");
@@ -96,6 +97,50 @@ namespace AuthApi.WebApi
             });
             #endregion
 
+            #region Rate Limiting
+            builder.Services.Configure<RateLimitingOptions>(
+                builder.Configuration.GetSection("RateLimiting"));
+
+            builder.Services.AddRateLimiter(options =>
+            {
+                var rlOptions = builder.Configuration
+                    .GetSection("RateLimiting")
+                    .Get<RateLimitingOptions>() ?? new RateLimitingOptions();
+
+                // Auth policy: login, register
+                options.AddFixedWindowLimiter("auth", opt =>
+                {
+                    opt.PermitLimit = rlOptions.Auth.PermitLimit;
+                    opt.Window = TimeSpan.FromMinutes(rlOptions.Auth.WindowMinutes);
+                    opt.QueueLimit = rlOptions.Auth.QueueLimit;
+                });
+
+                // Refresh policy: refresh-token
+                options.AddFixedWindowLimiter("refresh", opt =>
+                {
+                    opt.PermitLimit = rlOptions.Refresh.PermitLimit;
+                    opt.Window = TimeSpan.FromMinutes(rlOptions.Refresh.WindowMinutes);
+                    opt.QueueLimit = rlOptions.Refresh.QueueLimit;
+                });
+
+                // Custom 429 response
+                options.OnRejected = async (context, token) =>
+                {
+                    context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+                    var retryAfter = rlOptions.Auth.WindowMinutes * 60;
+                    context.HttpContext.Response.Headers.RetryAfter = retryAfter.ToString();
+
+                    await context.HttpContext.Response.WriteAsJsonAsync(new
+                    {
+                        error = "Too Many Requests",
+                        message = "Quá nhiều yêu cầu. Vui lòng thử lại sau.",
+                        retryAfterSeconds = retryAfter
+                    }, cancellationToken: token);
+                };
+            });
+
+            #endregion
+
             #region Config JWT
             var jwtSettings = builder.Configuration.GetSection("AppSettings");
             var key = Encoding.UTF8.GetBytes(jwtSettings["JwtKey"]!);
@@ -126,8 +171,6 @@ namespace AuthApi.WebApi
                 {
                     OnMessageReceived = context =>
                     {
-                        //var token = context.Request.Cookies["accessToken"]; cach luu acesstoken len cookie
-
                         var authorization = context.Request.Headers.Authorization.FirstOrDefault();
                         if (!string.IsNullOrEmpty(authorization) && authorization.StartsWith("Bearer "))
                         {
@@ -194,12 +237,12 @@ namespace AuthApi.WebApi
             #region Setup CookiePolicyOptions
             builder.Services.Configure<CookiePolicyOptions>(options =>
             {
-                options.MinimumSameSitePolicy = SameSiteMode.Unspecified;
+                options.MinimumSameSitePolicy = SameSiteMode.None;
                 options.HttpOnly = HttpOnlyPolicy.None;
                 options.OnAppendCookie = ctx =>
                 {
                     ctx.CookieOptions.SameSite = SameSiteMode.None;
-                    ctx.CookieOptions.Secure = isDev;
+                    ctx.CookieOptions.Secure = true;
                     //ctx.CookieOptions.HttpOnly = true;
                     ctx.CookieOptions.IsEssential = true;
                     ctx.CookieOptions.Path = "/";
@@ -207,8 +250,10 @@ namespace AuthApi.WebApi
 
                 options.OnDeleteCookie = ctx =>
                 {
-                    ctx.CookieOptions.SameSite = SameSiteMode.None;
+                    ctx.CookieOptions.Path = "/";
                     ctx.CookieOptions.Secure = true;
+                    ctx.CookieOptions.IsEssential = true;
+                    ctx.CookieOptions.SameSite = SameSiteMode.None;
                 };
             });
             #endregion 
@@ -219,13 +264,13 @@ namespace AuthApi.WebApi
             builder.Services.AddSwaggerGen(options =>
             {
                 options.SwaggerDoc("v1", new OpenApiInfo
-
                 {
                     Title = "Travel Now API",
                     Version = "v1",
                     Description = "ASP.NET Core Web API với Google OAuth + JWT Bearer"
                 });
 
+                // JWT
                 options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
                 {
                     Name = "Authorization",
@@ -233,13 +278,31 @@ namespace AuthApi.WebApi
                     Scheme = "Bearer",
                     BearerFormat = "JWT",
                     In = ParameterLocation.Header,
-                    Description = "Nhập JWT token theo định dạng: Bearer {token}\nVí dụ: Bearer eyJhbGciOiJIUzI1NiIs..."
+                    Description = "Nhập JWT token theo định dạng: Bearer {token}"
                 });
 
-                options.AddSecurityRequirement(document => new OpenApiSecurityRequirement
+                // CSRF
+                options.AddSecurityDefinition("CSRF", new OpenApiSecurityScheme
                 {
-                    [new OpenApiSecuritySchemeReference("Bearer", document)] = []
+                    Name = "X-CSRF-TOKEN",
+                    Type = SecuritySchemeType.ApiKey,
+                    In = ParameterLocation.Header,
+                    Description = "Nhập CSRF token"
                 });
+
+                // JWT requirement
+                options.AddSecurityRequirement(document =>
+                    new OpenApiSecurityRequirement
+                    {
+                        [new OpenApiSecuritySchemeReference("Bearer", document)] = []
+                    });
+
+                // CSRF requirement
+                options.AddSecurityRequirement(document =>
+                    new OpenApiSecurityRequirement
+                    {
+                        [new OpenApiSecuritySchemeReference("CSRF", document)] = []
+                    });
             });
             #endregion
 
@@ -286,6 +349,8 @@ namespace AuthApi.WebApi
             });
 
             app.UseCors("AllowNextJS");
+
+            app.UseRateLimiter();
 
             app.UseHttpsRedirection();
 

@@ -1,10 +1,13 @@
 ﻿using AuthApi.Application.Abstractions.Interfaces.Auth;
+using AuthApi.Application.Abstractions.Interfaces.UnitOfWork;
+using AuthApi.Application.Common;
 using AuthApi.Application.Features.Auth.DTOs;
 using AuthApi.Infrastructure.Common;
 using AuthApi.Infrastructure.Identities;
 using AuthApi.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Query;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
@@ -16,6 +19,7 @@ namespace AuthApi.Infrastructure.Services.Token
 {
     public class TokenService(
         AppDbContext _dbContext,
+        IUnitOfWork _uow,
         UserManager<ApplicationUser> _userManager,
         IOptions<AppSettings> _appSetting,
         IAuthCookieService _tokenHandler) : ITokenService
@@ -35,7 +39,7 @@ namespace AuthApi.Infrastructure.Services.Token
             };
 
             _dbContext.RefreshToken.Add(refreshTokenEntity);
-            await _dbContext.SaveChangesAsync();
+            await _uow.SaveChangesAsync();
 
             _tokenHandler.SetRefreshTokenCookie(token: refreshToken, days: expiredDay);
             _tokenHandler.SetCSRFTokenCookie(days: expiredDay);
@@ -51,13 +55,15 @@ namespace AuthApi.Infrastructure.Services.Token
             var claims = new List<Claim>
             {
                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-               new Claim(ClaimTypes.Email, user.Email ?? ""),
+               new Claim(ClaimTypes.Email, user.Email ?? string.Empty),
                new Claim(ClaimTypes.Name, user.UserName),
             };
 
             claims.AddRange(roles.Select(name => new Claim(ClaimTypes.Role, name)));
 
-            var jwtKey = _appSetting.Value.JwtKey ?? throw new Exception("JWT Key missing");
+            var jwtKey = _appSetting.Value.JwtKey
+                ?? throw new InvalidOperationException(
+                    "JWT Key is not configured. Set JWT_KEY environment variable or add JwtKey to AppSettings.");
 
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -80,35 +86,35 @@ namespace AuthApi.Infrastructure.Services.Token
             return Convert.ToBase64String(randomNumber);
         }
 
-        public async Task<AuthResponse> RefreshTokenServiceAsync()
+        public async Task<Result<AuthResponse>> RefreshTokenServiceAsync()
         {
             var refreshTokenToCookie = _tokenHandler.GetRefreshTokenCookie();
             if (refreshTokenToCookie == null)
-                throw new SecurityTokenException("Refresh token is missing");
+                return Result<AuthResponse>.Fail(new Error(ErrorCodes.TokenRefreshError, "RefreshToken not exist!"));
 
             var refreshTokenEntity = await _dbContext.RefreshToken.FirstOrDefaultAsync(p => p.Token == refreshTokenToCookie
                                                                                         && p.ExpiresAt > DateTime.UtcNow
                                                                                         && !p.IsRevoked);
             if (refreshTokenEntity == null)
-                throw new SecurityTokenException("Invalid or expiredDay refresh token");
+                return Result<AuthResponse>.Fail(new Error(ErrorCodes.TokenRefreshError, "Invalid or expired RefreshToken!"));
 
             var user = await _userManager.FindByIdAsync(refreshTokenEntity.UserId.ToString());
 
             if (user == null)
-                throw new SecurityTokenException("User not found");
+                return Result<AuthResponse>.Fail(new Error(ErrorCodes.UserNotFound, "User not found in database"));
 
             var roles = await _userManager.GetRolesAsync(user);
 
             refreshTokenEntity.IsRevoked = true;
-            await _dbContext.SaveChangesAsync();
+            await _uow.SaveChangesAsync();
 
-            return await GenerateTokenServiceAsync(new AuthUserDto
+            return Result<AuthResponse>.Success(await GenerateTokenServiceAsync(new AuthUserDto
             {
                 Id = user.Id,
                 Email = user.Email ?? string.Empty,
                 UserName = user.UserName!,
                 Roles = [.. roles]
-            }, roles);
+            }, roles));
         }
 
         public async Task RevokeRefreshTokenServiceAsync()
@@ -120,7 +126,7 @@ namespace AuthApi.Infrastructure.Services.Token
             if (entity == null) return;
 
             entity.IsRevoked = true;
-            await _dbContext.SaveChangesAsync();
+            await _uow.SaveChangesAsync();
         }
     }
 }

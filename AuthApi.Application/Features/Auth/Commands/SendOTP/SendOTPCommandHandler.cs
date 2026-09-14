@@ -4,14 +4,15 @@ using AuthApi.Application.Common;
 using AuthApi.Application.Features.Auth.DTOs;
 using AuthApi.Domain.ObjectValues;
 
-namespace AuthApi.Application.Features.Auth.Commands.SendOTP
+namespace AuthApi.Application.Features.Auth.Commands.SendOTP;
+
+public class SendOTPCommandHandler(IIdentityService _services) : ICommandHandler<SendOTPCommand, Result<OtpResponse>>
 {
-    public class SendOTPCommandHandler(IIdentityService _identities) : ICommandHandler<SendOTPCommand, Result<OtpResponse>>
+    public async Task<Result<OtpResponse>> Handle(SendOTPCommand request, CancellationToken cancellationToken)
     {
-        public async Task<Result<OtpResponse>> Handle(SendOTPCommand request, CancellationToken cancellationToken)
-        {
-            var email = Email.Create(request.Email);
-            return await _identities.SendOTPAsync(email.Value);
-        }
+        if (!Email.TryCreate(request.Email, out var email))
+            return Result<OtpResponse>.Fail(AuthErrors.EmailInvalid);
+
+        return await _services.SendOTPAsync(email!.Value, cancellationToken);
     }
 }

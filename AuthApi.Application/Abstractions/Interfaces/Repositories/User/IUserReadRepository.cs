@@ -1,7 +1,7 @@
 using AuthApi.Application.Features.Auth.DTOs;
 using AuthApi.Application.Features.Users.DTOs;
 
-namespace AuthApi.Application.Abstractions.Interfaces.Repositories;
+namespace AuthApi.Application.Abstractions.Interfaces.Repositories.User;
 
 public interface IUserReadRepository
 {

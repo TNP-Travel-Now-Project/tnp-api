@@ -1,5 +1,5 @@
 using AuthApi.Application.Abstractions.Interfaces.Cache;
-using AuthApi.Application.Abstractions.Interfaces.Repositories;
+using AuthApi.Application.Abstractions.Interfaces.Repositories.User;
 using AuthApi.Application.Abstractions.Messaging.Query;
 using AuthApi.Application.Common;
 using AuthApi.Application.Common.Security;
@@ -10,7 +10,7 @@ namespace AuthApi.Application.Features.Auth.Queries.Me
     public class MeQueryHandler(
         IUserReadRepository _userRepo,
         IUserContext _context,
-        ICallCacheService _callCache) : IQueryHandler<MeQuery, Result<MeResponse>>
+        ICallCacheService<MeResponse> _callCache) : IQueryHandler<MeQuery, Result<MeResponse>>
     {
         private const string CacheKeyPrefix = "cache:me:";
         private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(5);
@@ -18,7 +18,7 @@ namespace AuthApi.Application.Features.Auth.Queries.Me
         public async Task<Result<MeResponse>> Handle(MeQuery request, CancellationToken cancellationToken)
         {
             if (!_context.IsAuthenticated)
-                return Result<MeResponse>.Fail(new Error(ErrorCodes.UserNotFound, "User not authenticated"));
+                return Result<MeResponse>.Fail(new Error(ErrorCodes.Unauthorized, "User not authenticated"));
 
             var userId = _context.UserId;
             var cacheKey = $"{CacheKeyPrefix}{userId}";

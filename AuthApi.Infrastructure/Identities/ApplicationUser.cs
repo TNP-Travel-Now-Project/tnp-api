@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Identity;
+﻿using AuthApi.Domain;
+using Microsoft.AspNetCore.Identity;
 
 namespace AuthApi.Infrastructure.Identities
 {
@@ -9,6 +10,7 @@ namespace AuthApi.Infrastructure.Identities
         public DateOnly DateOfBirth { get; set; }
         public DateTime? UpdatedAt { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public DateTime? DeletedAt { get; set; }
 
         public ApplicationUser() { }
 
